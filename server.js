@@ -1,7 +1,9 @@
+
 require("dotenv").config();
 
 var express = require("express");
 const app = express();
+const path = require("path");
 
 const socketio = require("socket.io");
 
@@ -79,6 +81,8 @@ app.use(function (req, res, next) {
 
 
 app.use("/public", express.static(__dirname + "/public"));
+// Serve the production React frontend.
+app.use(express.static(path.join(__dirname, "client", "dist")));
 app.set("view engine", "ejs");
 
 const io = socketio(http);
