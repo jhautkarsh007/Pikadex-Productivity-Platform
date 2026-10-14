@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Pikadex - Notes</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f2fa;
+      color: #251039;
+    }
+
+    h1 {
+      color: #4d0878;
+    }
+
+    input,
+    textarea,
+    button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font: inherit;
+      border-radius: 5px;
+    }
+
+    input,
+    textarea {
+      border: 1px solid #bbb;
+      background: #fff;
+      color: #251039;
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    button {
+      background: #6500a0;
+      color: white;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #4d0878;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .note {
+      background: white;
+      padding: 16px;
+      margin: 12px 0;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+      box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
+    }
+
+    .note h3 {
+      margin-top: 0;
+    }
+
+    .note-content {
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .note button {
+      width: auto;
+      min-width: 90px;
+      margin-right: 8px;
+    }
+
+    .delete-button {
+      background: #c62828;
+    }
+
+    .delete-button:hover {
+      background: #991b1b;
+    }
+
+    #noteStatus {
+      min-height: 22px;
+      margin: 10px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      color: #6500a0;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>My Notes</h1>
+  <p>Write, organize, and save notes for your daily work.</p>
+
+  <form id="noteForm">
+    <label for="noteTitle">Note title</label>
+    <input
+      id="noteTitle"
+      name="title"
+      type="text"
+      placeholder="Enter note title"
+      maxlength="100"
+      required
+    >
+
+    <label for="noteContent">Note content</label>
+    <textarea
+      id="noteContent"
+      name="content"
+      placeholder="Write your note..."
+      maxlength="5000"
+      required
+    ></textarea>
+
+    <button id="submitButton" type="submit">Save Note</button>
+    <button id="cancelButton" type="button" hidden>
+      Cancel Edit
+    </button>
+  </form>
+
+  <p id="noteStatus" role="status" aria-live="polite"></p>
+
+  <h2>Saved Notes</h2>
+  <div id="notes">
+    Loading notes...
+  </div>
+
+  <a class="back-link" href="/index.html">Back to Home</a>
+
+  <script>
+    "use strict";
+
+    const form = document.getElementById("noteForm");
+    const titleInput = document.getElementById("noteTitle");
+    const contentInput = document.getElementById("noteContent");
+    const notesContainer = document.getElementById("notes");
+    const submitButton = document.getElementById("submitButton");
+    const cancelButton = document.getElementById("cancelButton");
+    const statusMessage = document.getElementById("noteStatus");
+
+    let notes = [];
+    let editingNoteId = null;
+    let isLoading = false;
+
+    function showStatus(message, isError = false) {
+      statusMessage.textContent = message;
+      statusMessage.style.color = isError ? "#c62828" : "#287a35";
+    }
+
+    function getAccessToken() {
+      return localStorage.getItem("accessToken");
+    }
+
+    async function notesRequest(endpoint, fields = {}) {
+      const token = getAccessToken();
+
+      if (!token) {
+        window.location.replace("/login");
+        throw new Error("Please log in to access your notes.");
+      }
+
+      // express-formidable in server.js parses multipart form data.
+      const formData = new FormData();
+      formData.append("accessToken", token);
+
+      for (const [key, value] of Object.entries(fields)) {
+        formData.append(key, String(value));
+      }
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: formData
+      });
+
+      let result;
+
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error("The server returned an unexpected response.");
+      }
+
+      if (response.status === 401) {
+        localStorage.removeItem("accessToken");
+        window.location.replace("/login");
+        throw new Error("Your session is invalid or expired. Please log in again.");
+      }
+
+      if (!response.ok || result.status !== "success") {
+        throw new Error(result.message || "The request failed.");
+      }
+
+      return result;
+    }
+
+    function resetEditor() {
+      form.reset();
+      editingNoteId = null;
+      submitButton.textContent = "Save Note";
+      cancelButton.hidden = true;
+    }
+
+    function renderNotes() {
+      notesContainer.replaceChildren();
+
+      if (notes.length === 0) {
+        const emptyMessage = document.createElement("p");
+        emptyMessage.textContent = "No notes yet. Create your first note!";
+        notesContainer.appendChild(emptyMessage);
+        return;
+      }
+
+      for (const note of notes) {
+        const article = document.createElement("article");
+        article.className = "note";
+
+        const heading = document.createElement("h3");
+        heading.textContent = note.title;
+
+        const content = document.createElement("p");
+        content.className = "note-content";
+        content.textContent = note.content;
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.textContent = "Edit";
+
+        editButton.addEventListener("click", () => {
+          editingNoteId = note._id;
+          titleInput.value = note.title;
+          contentInput.value = note.content;
+
+          submitButton.textContent = "Update Note";
+          cancelButton.hidden = false;
+
+          showStatus("Editing note.");
+          titleInput.focus();
+          form.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+        deleteButton.className = "delete-button";
+
+        deleteButton.addEventListener("click", async () => {
+          const confirmed = window.confirm(
+            `Are you sure you want to delete "${note.title}"?`
+          );
+
+          if (!confirmed) {
+            return;
+          }
+
+          deleteButton.disabled = true;
+
+          try {
+            await notesRequest("/api/notes/delete", {
+              noteId: note._id
+            });
+
+            if (editingNoteId === note._id) {
+              resetEditor();
+            }
+
+            showStatus("Note deleted successfully.");
+            await loadNotes();
+          } catch (error) {
+            showStatus(error.message, true);
+            deleteButton.disabled = false;
+          }
+        });
+
+        article.append(heading, content, editButton, deleteButton);
+        notesContainer.appendChild(article);
+      }
+    }
+
+    async function loadNotes() {
+      if (isLoading) {
+        return;
+      }
+
+      isLoading = true;
+      notesContainer.textContent = "Loading notes...";
+
+      try {
+        const result = await notesRequest("/api/notes/list");
+
+        if (!Array.isArray(result.data)) {
+          throw new Error("The server returned an invalid notes list.");
+        }
+
+        notes = result.data;
+        renderNotes();
+      } catch (error) {
+        notesContainer.textContent = "Unable to load notes.";
+        showStatus(error.message, true);
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+
+      if (!title || !content) {
+        showStatus("Please enter both a title and note content.", true);
+        return;
+      }
+
+      if (title.length > 100 || content.length > 5000) {
+        showStatus(
+          "The title can contain up to 100 characters and the content up to 5000.",
+          true
+        );
+        return;
+      }
+
+      submitButton.disabled = true;
+      cancelButton.disabled = true;
+
+      try {
+        if (editingNoteId) {
+          await notesRequest("/api/notes/update", {
+            noteId: editingNoteId,
+            title,
+            content
+          });
+
+          showStatus("Note updated successfully.");
+        } else {
+          await notesRequest("/api/notes/create", {
+            title,
+            content
+          });
+
+          showStatus("Note saved successfully.");
+        }
+
+        resetEditor();
+        await loadNotes();
+      } catch (error) {
+        showStatus(error.message, true);
+      } finally {
+        submitButton.disabled = false;
+        cancelButton.disabled = false;
+      }
+    });
+
+    cancelButton.addEventListener("click", () => {
+      resetEditor();
+      showStatus("Editing cancelled.");
+    });
+
+    // Load notes belonging to the authenticated user.
+    loadNotes();
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "my_social_network",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.6.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-formidable": "^1.2.0",
+    "fs": "^0.0.1-security",
+    "http": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.3",
+    "moment": "^2.30.1",
+    "mongodb": "^3.7.4",
+    "mongoose": "^7.3.4",
+    "socket.io": "^4.8.4"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
+  }
+}

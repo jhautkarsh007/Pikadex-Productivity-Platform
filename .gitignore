@@ -1,0 +1,30 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+npm-debug.log*
+
+
+# Local server backups
+server-backup.js
+server.js.before-*
+
+# Generated audit reports
+npm-audit-report.json
+
+
+# Local backup files
+package.json.before-*
+package-lock.json.before-*
+
+
+# Local backup files
+*.backup
+
+# Local media files
+/public/videos/
+
+# Generated audit report
+npm-audit-report.json
