@@ -1,133 +1,142 @@
 # Pikadex — Productivity & Collaboration Platform
 
-Pikadex is a web application that combines task management, productivity analytics, personal notes, and real-time collaboration features. The project uses Node.js and Express for the backend, MongoDB for persistent data storage, and Socket.IO for real-time communication.
+A full-stack productivity application featuring project and task management, time tracking, productivity analytics, personal notes, user authentication, and real-time chat.
+
+**Live Demo:** https://pikadex-productivity-platform.onrender.com  
+**GitHub Repository:** https://github.com/jhautkarsh007/Pikadex-Productivity-Platform
 
 ## Features
 
-- **User Authentication:** Account registration, login, and token-based session handling.
-- **Task Management:** Organize tasks into projects, update task status, and track time spent on tasks.
-- **Productivity Analytics:** View project progress, task completion rates, tracked time, and recent activity.
-- **Personal Notes:** Create, view, edit, and delete notes stored in MongoDB.
-- **Real-Time Chat:** Exchange messages using Socket.IO.
-- **User Profiles:** Profile-related features and supporting pages.
-- **Automated Tests:** Verify application routes and rejection of unauthenticated API requests.
+- **Authentication:** User registration, login, JWT-based authentication, and session revocation.
+- **Project & Task Management:** Organize tasks by project, update task status, and track time using task timers.
+- **Productivity Analytics:** Visualize project progress, task completion rates, total tracked time, and recent activity.
+- **Personal Notes:** Create, view, update, and delete notes stored in MongoDB.
+- **Real-Time Chat:** Exchange messages between connected users using Socket.IO.
+- **Account Data Isolation:** Associate notes and task projects with the authenticated user's database identity.
+- **Automated Testing:** HTTP smoke tests and checks for missing or invalid authentication.
 
 ## Tech Stack
 
-**Backend:** Node.js, Express.js  
-**Database:** MongoDB  
-**Authentication:** JSON Web Tokens (JWT), bcrypt  
-**Real-Time Communication:** Socket.IO  
-**Frontend:** HTML, CSS, JavaScript, Bootstrap  
-**Testing:** Node.js built-in test runner
+| Category | Technologies |
+|---|---|
+| Backend | Node.js, Express.js |
+| Database | MongoDB Atlas, MongoDB Node.js Driver |
+| Authentication | JSON Web Tokens (JWT), bcrypt |
+| Real-Time Communication | Socket.IO |
+| Frontend | HTML, CSS, JavaScript, Bootstrap |
+| Templates | EJS |
+| Testing | Node.js built-in test runner |
+| Deployment | Render |
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js and npm
-- MongoDB running locally or an accessible MongoDB instance
-- Git (optional, for cloning and version control)
+- A MongoDB database, such as MongoDB Atlas
+- Git
 
-### 1. Install dependencies
+### 1. Clone the repository
 
-Clone or navigate to your authorized project copy, then run:
+```bash
+git clone https://github.com/jhautkarsh007/Pikadex-Productivity-Platform.git
+cd Pikadex-Productivity-Platform
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Configure environment variables
+### 3. Configure environment variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root. Use `.env.example` as a template.
 
-```env
+```dotenv
 PORT=3000
 APP_URL=http://localhost:3000
-JWT_SECRET=replace_with_a_long_random_secret
-MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_URI=YOUR_MONGODB_CONNECTION_STRING
 MONGODB_DB=free_social_network
+JWT_SECRET=YOUR_STRONG_RANDOM_SECRET
 ```
 
-Replace the example JWT secret with a strong, randomly generated value.
+Replace the placeholder values with your own configuration. Your MongoDB connection string must point to a database that your application is authorized to access.
 
-**Important:** Make sure the application loads environment variables before reading them. If you use the `dotenv` package, add the following at the beginning of `server.js`:
-
-```javascript
-require("dotenv").config();
-```
-
-Keep `.env` out of Git. Never publish database credentials or authentication secrets.
-
-### 3. Start MongoDB
-
-Start your local MongoDB service, or configure `MONGODB_URI` to connect to your database.
+Keep `.env` private. Never commit database credentials or real authentication secrets to GitHub.
 
 ### 4. Start the application
+
+Make sure your MongoDB instance is running and your network access is configured correctly.
 
 ```bash
 npm start
 ```
 
-Open `http://localhost:3000` in your browser.
+Open http://localhost:3000 in your browser.
 
 ### 5. Run the tests
 
-With the application server and database running, open a second terminal and execute:
+With the application server and required database available, open another terminal:
 
 ```bash
 npm test
 ```
 
-The project currently has 16 passing automated tests in the development environment. Test results may vary after further code changes or in a different environment.
+Sixteen automated tests passed during development verification. Run the tests again after making changes to verify the current result.
 
-## Task and Notes API
+## API Endpoints
 
-The API uses authenticated requests and associates task projects and notes with the logged-in user's database identity.
+### Notes
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/api/notes/list` | List the user's notes |
+| POST | `/api/notes/list` | List the authenticated user's notes |
 | POST | `/api/notes/create` | Create a note |
 | POST | `/api/notes/update` | Update an owned note |
 | POST | `/api/notes/delete` | Delete an owned note |
-| POST | `/api/tasks/load` | Load the user's projects and tasks |
-| POST | `/api/tasks/save` | Save the user's projects and tasks |
 
-Requests to these endpoints use an `accessToken`. The server verifies the token and checks the stored session before accessing account-specific data.
+### Tasks
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/tasks/load` | Load the authenticated user's projects |
+| POST | `/api/tasks/save` | Save the authenticated user's projects |
+
+These endpoints require a valid access token. The server verifies the session and associates stored data with the corresponding user.
 
 ## Project Structure
 
 ```text
-Pikadex/
-├── public/       # Frontend pages, styles, and client-side scripts
+Pikadex-Productivity-Platform/
+├── public/       # Frontend pages, CSS, and client-side JavaScript
 ├── tests/        # Automated tests
 ├── views/        # EJS templates
-├── server.js     # Express server and API routes
-├── package.json  # Dependencies and npm scripts
-└── README.md     # Project documentation
+├── utils/        # Supporting utilities
+├── server.js     # Express server, APIs, and Socket.IO
+├── package.json  # Dependencies and scripts
+├── package-lock.json
+├── .env.example  # Environment variable template
+└── README.md
 ```
 
-The exact contents may differ as the project evolves.
+## Security Considerations
 
-## Security Notes
-
-- Store secrets in environment variables and exclude `.env` from version control.
-- Keep dependencies updated and run `npm audit` when reviewing dependency security.
-- Validate input on the server and enforce ownership checks on account-specific records.
-- Browser-side login redirects are not a substitute for server-side authentication.
-- Task data stored in browser local storage may require a safe migration or backup when moving to account-based storage.
+- Keep production credentials in environment variables.
+- Enforce authentication and ownership checks on private data.
+- Never commit `.env` or production secrets.
+- Keep dependencies updated and review security advisories.
+- Browser-side redirects alone are not a security boundary; sensitive operations must be validated by the server.
 
 ## Future Improvements
 
-- Add stronger integration and authorization tests, including account-isolation tests.
-- Improve task data validation and error handling.
-- Add filters and more detailed productivity reports.
-- Improve deployment configuration and production logging.
-- Improve accessibility and responsive design.
+- Add broader automated integration and authorization tests.
+- Improve API validation and production error handling.
+- Expand productivity reports and date-based analytics.
+- Improve deployment monitoring and accessibility.
 
-## Attribution and Licensing
+## Attribution
 
-This project is based on the Pikadex repository by [arhammasroor](https://github.com/arhammasroor/Pikadex), with modifications made during development.
+This project builds on the original Pikadex project by [arhammasroor](https://github.com/arhammasroor/Pikadex). The original author has agreed to publication of this modified version.
 
-Before publicly redistributing or deploying the modified source, verify the original repository's applicable license and attribution requirements. The `license` field in this project's `package.json` should not be treated as proof that every upstream file is available for redistribution.
+The license for the upstream source and modifications should be documented in accordance with the agreement with the original author. Do not assume that package metadata alone establishes the license for every source file.
