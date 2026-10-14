@@ -93,7 +93,7 @@ io.on("connection", function (socket) {
   socketID = socket.id;
 });
 
-http.listen(PORT, function () {
+http.listen(PORT, "0.0.0.0", function () {
   console.log("Server started at " + mainURL);
 
   mongoClient.connect(
