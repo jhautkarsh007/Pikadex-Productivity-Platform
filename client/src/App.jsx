@@ -4,19 +4,20 @@ import Notes from './Notes'
 import Tasks from './Tasks'
 import Analytics from './Analytics'
 import Chat from './Chat'
+import Calendar from './Calendar'
 import './App.css'
 
 async function readJsonResponse(response) {
-  const rawResponse = await response.text()
+  const raw = await response.text()
 
-  if (!rawResponse) {
+  if (!raw) {
     throw new Error(
       `The server returned an empty response (HTTP ${response.status}).`
     )
   }
 
   try {
-    return JSON.parse(rawResponse)
+    return JSON.parse(raw)
   } catch {
     throw new Error(
       `The server returned an invalid response (HTTP ${response.status}).`
@@ -51,10 +52,14 @@ export default function App() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
-
   const [activePage, setActivePage] = useState('dashboard')
 
-  // Restore the existing session after a page refresh.
+  // Set the application name shown in the browser tab.
+  useEffect(() => {
+    document.title = 'Pikadex | Productivity Platform'
+  }, [])
+
+  // Restore the existing login after a refresh.
   useEffect(() => {
     let active = true
 
@@ -72,28 +77,16 @@ export default function App() {
         if (active) {
           setToken(savedToken)
           setUser(currentUser)
-          setActivePage('dashboard')
           setError('')
         }
-      } catch {
+      } catch (err) {
         if (active) {
-          // Keep the saved token if the backend is temporarily unavailable.
-          // Clear it when the server responds that the session is invalid.
-          try {
-            const retryUser = await fetchUser(savedToken)
-
-            if (active) {
-              setToken(savedToken)
-              setUser(retryUser)
-            }
-          } catch (retryError) {
-            if (!(retryError instanceof TypeError)) {
-              localStorage.removeItem('accessToken')
-            } else {
-              setError(
-                'Cannot connect to Pikadex. Check that the backend is running.'
-              )
-            }
+          if (err instanceof TypeError) {
+            setError(
+              'Cannot connect to Pikadex. Check that the backend is running.'
+            )
+          } else {
+            localStorage.removeItem('accessToken')
           }
         }
       } finally {
@@ -108,6 +101,7 @@ export default function App() {
     }
   }, [])
 
+  // Login through the existing Express backend.
   async function handleLogin(event) {
     event.preventDefault()
     setError('')
@@ -134,7 +128,6 @@ export default function App() {
       }
 
       localStorage.setItem('accessToken', result.accessToken)
-
       setToken(result.accessToken)
       setActivePage('dashboard')
       setPassword('')
@@ -143,7 +136,6 @@ export default function App() {
         const currentUser = await fetchUser(result.accessToken)
         setUser(currentUser)
       } catch {
-        // Login succeeded. The profile can be retried after refresh.
         setUser({ email: email.trim() })
       }
     } catch (err) {
@@ -153,6 +145,7 @@ export default function App() {
     }
   }
 
+  // Logout through Express and clear the local session.
   async function handleLogout() {
     const currentToken = token
     let logoutError = ''
@@ -177,7 +170,6 @@ export default function App() {
         err.message || 'The server could not confirm the logout.'
     } finally {
       localStorage.removeItem('accessToken')
-
       setToken('')
       setUser(null)
       setEmail('')
@@ -192,10 +184,16 @@ export default function App() {
     }
   }
 
+  function navigateTo(page) {
+    setError('')
+    setActivePage(page)
+  }
+
+  // Session-loading screen.
   if (checkingSession) {
     return (
       <main className="screen">
-        <p className="muted">Checking your session...</p>
+        <p className="muted">Loading Pikadex...</p>
       </main>
     )
   }
@@ -208,10 +206,7 @@ export default function App() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
+            onClick={() => navigateTo('dashboard')}
           >
             ← Back to Dashboard
           </button>
@@ -222,7 +217,7 @@ export default function App() {
     )
   }
 
-  // Task Manager and Timer page.
+  // Tasks and Timer page.
   if (token && user && activePage === 'tasks') {
     return (
       <main className="screen">
@@ -230,10 +225,7 @@ export default function App() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
+            onClick={() => navigateTo('dashboard')}
           >
             ← Back to Dashboard
           </button>
@@ -252,10 +244,7 @@ export default function App() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
+            onClick={() => navigateTo('dashboard')}
           >
             ← Back to Dashboard
           </button>
@@ -266,7 +255,7 @@ export default function App() {
     )
   }
 
-  // Real-time Socket.IO chat page.
+  // Real-time chat page.
   if (token && user && activePage === 'chat') {
     return (
       <main className="screen">
@@ -274,10 +263,7 @@ export default function App() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
+            onClick={() => navigateTo('dashboard')}
           >
             ← Back to Dashboard
           </button>
@@ -288,8 +274,65 @@ export default function App() {
     )
   }
 
-  // Main dashboard.
+  // Calendar page.
+  if (token && user && activePage === 'calendar') {
+    return (
+      <main className="screen">
+        <section className="dashboard calendar-dashboard">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => navigateTo('dashboard')}
+          >
+            ← Back to Dashboard
+          </button>
+
+          <Calendar user={user} />
+        </section>
+      </main>
+    )
+  }
+
+  // Dashboard feature cards.
   if (token && user) {
+    const features = [
+      {
+        id: 'notes',
+        icon: '📝',
+        title: 'Notes',
+        description: 'Your personal notes, saved in MongoDB.',
+        button: 'Open Notes',
+      },
+      {
+        id: 'tasks',
+        icon: '✅',
+        title: 'Tasks',
+        description: 'Organize projects and track your working time.',
+        button: 'Open Task Manager',
+      },
+      {
+        id: 'calendar',
+        icon: '🗓️',
+        title: 'Calendar',
+        description: 'Plan events, deadlines, study sessions, and your schedule.',
+        button: 'Open Calendar',
+      },
+      {
+        id: 'analytics',
+        icon: '📊',
+        title: 'Analytics',
+        description: 'Review your productivity and task progress.',
+        button: 'Open Analytics',
+      },
+      {
+        id: 'chat',
+        icon: '💬',
+        title: 'Real-time Chat',
+        description: 'Send and receive messages instantly.',
+        button: 'Open Chat',
+      },
+    ]
+
     return (
       <main className="screen">
         <section className="dashboard">
@@ -308,69 +351,20 @@ export default function App() {
           {error && <p className="error">{error}</p>}
 
           <div className="feature-grid">
-            <article className="feature">
-              <span>📝</span>
-              <h2>Notes</h2>
-              <p>Your personal notes, saved in MongoDB.</p>
+            {features.map((feature) => (
+              <article className="feature" key={feature.id}>
+                <span>{feature.icon}</span>
+                <h2>{feature.title}</h2>
+                <p>{feature.description}</p>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('notes')
-                }}
-              >
-                Open Notes
-              </button>
-            </article>
-
-            <article className="feature">
-              <span>✅</span>
-              <h2>Tasks</h2>
-              <p>Organize projects and track your working time.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('tasks')
-                }}
-              >
-                Open Task Manager
-              </button>
-            </article>
-
-            <article className="feature">
-              <span>📊</span>
-              <h2>Analytics</h2>
-              <p>Review your productivity and task progress.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('analytics')
-                }}
-              >
-                Open Analytics
-              </button>
-            </article>
-
-            <article className="feature">
-              <span>💬</span>
-              <h2>Real-time Chat</h2>
-              <p>Send and receive messages instantly.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('chat')
-                }}
-              >
-                Open Chat
-              </button>
-            </article>
+                <button
+                  type="button"
+                  onClick={() => navigateTo(feature.id)}
+                >
+                  {feature.button}
+                </button>
+              </article>
+            ))}
           </div>
 
           <button
@@ -382,7 +376,7 @@ export default function App() {
           </button>
 
           <p className="muted footer-note">
-            React · Express.js · MongoDB Atlas · Socket.IO
+            Pikadex · React · Express.js · MongoDB Atlas · Socket.IO
           </p>
         </section>
       </main>
@@ -436,7 +430,7 @@ export default function App() {
         </form>
 
         <p className="muted footer-note">
-          Powered by React, Express.js and MongoDB
+          Pikadex Productivity Platform
         </p>
       </section>
     </main>
