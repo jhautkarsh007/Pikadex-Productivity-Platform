@@ -1889,6 +1889,269 @@ http.listen(PORT, "0.0.0.0", function () {
       // ================ END TASK STORAGE API ================
 
       
+      // ================ CALENDAR STORAGE API ================
+
+      const calendarCollection = database.collection("calendarEvents");
+
+      const CALENDAR_CATEGORIES = [
+        "Work",
+        "Personal",
+        "Study",
+        "Health",
+        "Other"
+      ];
+
+      function getCalendarFields(request) {
+        return request.fields || request.body || {};
+      }
+
+      function validateCalendarEvent(fields) {
+        const title =
+          typeof fields.title === "string" ? fields.title.trim() : "";
+
+        const date =
+          typeof fields.date === "string" ? fields.date : "";
+
+        const time =
+          typeof fields.time === "string" ? fields.time : "";
+
+        const category =
+          typeof fields.category === "string" ? fields.category : "";
+
+        const description =
+          typeof fields.description === "string"
+            ? fields.description.trim()
+            : "";
+
+        const validDate =
+          /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+          !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) &&
+          new Date(`${date}T00:00:00Z`)
+            .toISOString()
+            .startsWith(date);
+
+        const validTime =
+          time === "" ||
+          (
+            /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+          );
+
+        if (
+          !title ||
+          title.length > 100 ||
+          !validDate ||
+          !validTime ||
+          !CALENDAR_CATEGORIES.includes(category) ||
+          description.length > 500
+        ) {
+          return {
+            valid: false,
+            message: "Invalid calendar event details."
+          };
+        }
+
+        return {
+          valid: true,
+          event: {
+            title,
+            date,
+            time,
+            category,
+            description
+          }
+        };
+      }
+
+      function serializeCalendarEvent(event) {
+        return {
+          id: event._id.toString(),
+          title: event.title,
+          date: event.date,
+          time: event.time,
+          category: event.category,
+          description: event.description,
+          createdAt: event.createdAt,
+          updatedAt: event.updatedAt
+        };
+      }
+
+      // List only the authenticated user's calendar events.
+      app.post("/api/calendar/list", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const events = await calendarCollection
+              .find({ userId: user._id })
+              .sort({ date: 1, time: 1 })
+              .toArray();
+
+            return response.json({
+              status: "success",
+              data: events.map(serializeCalendarEvent)
+            });
+          } catch (error) {
+            console.error("Unable to load calendar events:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to load calendar events."
+            });
+          }
+        });
+      });
+
+      // Create an event owned by the authenticated user.
+      app.post("/api/calendar/create", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const validation = validateCalendarEvent(
+              getCalendarFields(request)
+            );
+
+            if (!validation.valid) {
+              return response.status(400).json({
+                status: "error",
+                message: validation.message
+              });
+            }
+
+            const now = new Date();
+
+            const event = {
+              ...validation.event,
+              userId: user._id,
+              createdAt: now,
+              updatedAt: now
+            };
+
+            const result = await calendarCollection.insertOne(event);
+
+            return response.status(201).json({
+              status: "success",
+              message: "Calendar event created.",
+              data: serializeCalendarEvent({
+                ...event,
+                _id: result.insertedId
+              })
+            });
+          } catch (error) {
+            console.error("Unable to create calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to create calendar event."
+            });
+          }
+        });
+      });
+
+      // Update only an event owned by the authenticated user.
+      app.post("/api/calendar/update", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const fields = getCalendarFields(request);
+            const eventId = fields.eventId;
+
+            if (
+              typeof eventId !== "string" ||
+              !ObjectId.isValid(eventId)
+            ) {
+              return response.status(400).json({
+                status: "error",
+                message: "Invalid calendar event ID."
+              });
+            }
+
+            const validation = validateCalendarEvent(fields);
+
+            if (!validation.valid) {
+              return response.status(400).json({
+                status: "error",
+                message: validation.message
+              });
+            }
+
+            const result = await calendarCollection.updateOne(
+              {
+                _id: new ObjectId(eventId),
+                userId: user._id
+              },
+              {
+                $set: {
+                  ...validation.event,
+                  updatedAt: new Date()
+                }
+              }
+            );
+
+            if (result.matchedCount === 0) {
+              return response.status(404).json({
+                status: "error",
+                message: "Calendar event not found."
+              });
+            }
+
+            return response.json({
+              status: "success",
+              message: "Calendar event updated."
+            });
+          } catch (error) {
+            console.error("Unable to update calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to update calendar event."
+            });
+          }
+        });
+      });
+
+      // Delete only an event owned by the authenticated user.
+      app.post("/api/calendar/delete", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const fields = getCalendarFields(request);
+            const eventId = fields.eventId;
+
+            if (
+              typeof eventId !== "string" ||
+              !ObjectId.isValid(eventId)
+            ) {
+              return response.status(400).json({
+                status: "error",
+                message: "Invalid calendar event ID."
+              });
+            }
+
+            const result = await calendarCollection.deleteOne({
+              _id: new ObjectId(eventId),
+              userId: user._id
+            });
+
+            if (result.deletedCount === 0) {
+              return response.status(404).json({
+                status: "error",
+                message: "Calendar event not found."
+              });
+            }
+
+            return response.json({
+              status: "success",
+              message: "Calendar event deleted."
+            });
+          } catch (error) {
+            console.error("Unable to delete calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to delete calendar event."
+            });
+          }
+        });
+      });
+
+      // ============== END CALENDAR STORAGE API ==============
+
+
       // To-Do routes - use the existing MongoDB connection
       const todoCollection = database.collection("todoItems");
 

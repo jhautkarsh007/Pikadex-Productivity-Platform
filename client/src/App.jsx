@@ -5,6 +5,8 @@ import Tasks from './Tasks'
 import Analytics from './Analytics'
 import Chat from './Chat'
 import Calendar from './Calendar'
+import Navbar from './components/Navbar'
+import FeatureCard from './components/FeatureCard'
 import './App.css'
 
 async function readJsonResponse(response) {
@@ -43,6 +45,54 @@ async function fetchUser(accessToken) {
   return result.data
 }
 
+const FEATURES = [
+  {
+    id: 'tasks',
+    icon: '✓',
+    title: 'Task Manager',
+    description:
+      'Organize projects, manage tasks, and track time spent working.',
+    buttonLabel: 'Open tasks',
+    accent: 'green',
+  },
+  {
+    id: 'calendar',
+    icon: '▦',
+    title: 'Calendar',
+    description:
+      'Plan study sessions, deadlines, meetings, and personal events.',
+    buttonLabel: 'Open calendar',
+    accent: 'purple',
+  },
+  {
+    id: 'notes',
+    icon: '▤',
+    title: 'Notes',
+    description:
+      'Capture ideas and keep important information organized.',
+    buttonLabel: 'Open notes',
+    accent: 'blue',
+  },
+  {
+    id: 'analytics',
+    icon: '↗',
+    title: 'Analytics',
+    description:
+      'Review task completion and understand your tracked focus time.',
+    buttonLabel: 'View analytics',
+    accent: 'orange',
+  },
+  {
+    id: 'chat',
+    icon: '☏',
+    title: 'Real-time Chat',
+    description:
+      'Communicate instantly with other people in your chat room.',
+    buttonLabel: 'Open chat',
+    accent: 'pink',
+  },
+]
+
 export default function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -54,12 +104,11 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
 
-  // Set the application name shown in the browser tab.
   useEffect(() => {
     document.title = 'Pikadex | Productivity Platform'
   }, [])
 
-  // Restore the existing login after a refresh.
+  // Restore the existing authenticated session.
   useEffect(() => {
     let active = true
 
@@ -101,7 +150,6 @@ export default function App() {
     }
   }, [])
 
-  // Login through the existing Express backend.
   async function handleLogin(event) {
     event.preventDefault()
     setError('')
@@ -133,8 +181,7 @@ export default function App() {
       setPassword('')
 
       try {
-        const currentUser = await fetchUser(result.accessToken)
-        setUser(currentUser)
+        setUser(await fetchUser(result.accessToken))
       } catch {
         setUser({ email: email.trim() })
       }
@@ -145,7 +192,6 @@ export default function App() {
     }
   }
 
-  // Logout through Express and clear the local session.
   async function handleLogout() {
     const currentToken = token
     let logoutError = ''
@@ -189,7 +235,6 @@ export default function App() {
     setActivePage(page)
   }
 
-  // Session-loading screen.
   if (checkingSession) {
     return (
       <main className="screen">
@@ -198,240 +243,153 @@ export default function App() {
     )
   }
 
-  // Notes page.
-  if (token && user && activePage === 'notes') {
+  // Login screen.
+  if (!token || !user) {
     return (
       <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigateTo('dashboard')}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Notes accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Tasks and Timer page.
-  if (token && user && activePage === 'tasks') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigateTo('dashboard')}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Tasks accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Analytics page.
-  if (token && user && activePage === 'analytics') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigateTo('dashboard')}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Analytics accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Real-time chat page.
-  if (token && user && activePage === 'chat') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigateTo('dashboard')}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Chat user={user} />
-        </section>
-      </main>
-    )
-  }
-
-  // Calendar page.
-  if (token && user && activePage === 'calendar') {
-    return (
-      <main className="screen">
-        <section className="dashboard calendar-dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigateTo('dashboard')}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Calendar user={user} />
-        </section>
-      </main>
-    )
-  }
-
-  // Dashboard feature cards.
-  if (token && user) {
-    const features = [
-      {
-        id: 'notes',
-        icon: '📝',
-        title: 'Notes',
-        description: 'Your personal notes, saved in MongoDB.',
-        button: 'Open Notes',
-      },
-      {
-        id: 'tasks',
-        icon: '✅',
-        title: 'Tasks',
-        description: 'Organize projects and track your working time.',
-        button: 'Open Task Manager',
-      },
-      {
-        id: 'calendar',
-        icon: '🗓️',
-        title: 'Calendar',
-        description: 'Plan events, deadlines, study sessions, and your schedule.',
-        button: 'Open Calendar',
-      },
-      {
-        id: 'analytics',
-        icon: '📊',
-        title: 'Analytics',
-        description: 'Review your productivity and task progress.',
-        button: 'Open Analytics',
-      },
-      {
-        id: 'chat',
-        icon: '💬',
-        title: 'Real-time Chat',
-        description: 'Send and receive messages instantly.',
-        button: 'Open Chat',
-      },
-    ]
-
-    return (
-      <main className="screen">
-        <section className="dashboard">
+        <section className="login-card">
           <div className="brand-mark">P</div>
 
-          <p className="eyebrow">
-            PIKADEX PRODUCTIVITY PLATFORM
-          </p>
-
-          <h1>Welcome back!</h1>
+          <p className="eyebrow">YOUR PERSONAL WORKSPACE</p>
+          <h1>Welcome to Pikadex</h1>
 
           <p className="muted">
-            Signed in as {user.name || user.email || email}
+            Sign in to organize your work and stay productive.
           </p>
 
-          {error && <p className="error">{error}</p>}
+          <form onSubmit={handleLogin}>
+            <label htmlFor="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
 
-          <div className="feature-grid">
-            {features.map((feature) => (
-              <article className="feature" key={feature.id}>
-                <span>{feature.icon}</span>
-                <h2>{feature.title}</h2>
-                <p>{feature.description}</p>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
 
-                <button
-                  type="button"
-                  onClick={() => navigateTo(feature.id)}
-                >
-                  {feature.button}
-                </button>
-              </article>
-            ))}
-          </div>
+            {error && <p className="error">{error}</p>}
 
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleLogout}
-          >
-            Log out
-          </button>
+            <button type="submit" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
 
           <p className="muted footer-note">
-            Pikadex · React · Express.js · MongoDB Atlas · Socket.IO
+            Pikadex · Productivity Platform
           </p>
         </section>
       </main>
     )
   }
 
-  // Login page.
   return (
-    <main className="screen">
-      <section className="login-card">
-        <div className="brand-mark">P</div>
+    <main className="screen app-screen">
+      <section className="dashboard app-shell">
+        <Navbar
+          user={user}
+          activePage={activePage}
+          onNavigate={navigateTo}
+          onLogout={handleLogout}
+        />
 
-        <p className="eyebrow">YOUR PERSONAL WORKSPACE</p>
-
-        <h1>Welcome to Pikadex</h1>
-
-        <p className="muted">
-          Sign in to organize your work and stay productive.
-        </p>
-
-        <form onSubmit={handleLogin}>
-          <label htmlFor="email">Email address</label>
-
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-
-          <label htmlFor="password">Password</label>
-
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-
+        <div className="app-page-content">
           {error && <p className="error">{error}</p>}
 
-          <button type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+          {activePage === 'dashboard' && (
+            <section className="dashboard-home">
+              <div className="dashboard-welcome">
+                <div>
+                  <p className="eyebrow">
+                    YOUR PRODUCTIVITY WORKSPACE
+                  </p>
+                  <h1>
+                    Welcome back,{' '}
+                    {(user.name || user.username || 'there').split(' ')[0]}!
+                  </h1>
+                  <p className="muted">
+                    Bring your plans, tasks, and ideas together.
+                  </p>
+                </div>
 
-        <p className="muted footer-note">
-          Pikadex Productivity Platform
-        </p>
+                <div className="dashboard-date">
+                  <span className="dashboard-date-icon">▦</span>
+                  <span>
+                    <strong>
+                      {new Date().toLocaleDateString(undefined, {
+                        weekday: 'long',
+                      })}
+                    </strong>
+                    <small>
+                      {new Date().toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </small>
+                  </span>
+                </div>
+              </div>
+
+              <div className="section-heading">
+                <div>
+                  <h2>Your workspace</h2>
+                  <p className="muted">
+                    Choose a tool to continue your work.
+                  </p>
+                </div>
+
+                <span className="workspace-count">
+                  {FEATURES.length} tools
+                </span>
+              </div>
+
+              <div className="feature-grid feature-grid-modern">
+                {FEATURES.map((feature) => (
+                  <FeatureCard
+                    key={feature.id}
+                    {...feature}
+                    onClick={() => navigateTo(feature.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activePage === 'notes' && <Notes accessToken={token} />}
+
+          {activePage === 'tasks' && <Tasks accessToken={token} />}
+
+          {activePage === 'calendar' && (
+            <Calendar user={user} accessToken={token} />
+          )}
+
+          {activePage === 'analytics' && (
+            <Analytics accessToken={token} />
+          )}
+
+          {activePage === 'chat' && <Chat user={user} />}
+        </div>
+
+        <footer className="app-footer">
+          <span>
+            <span className="footer-brand-dot">P</span>
+            Pikadex
+          </span>
+          <span>Productivity, organized.</span>
+        </footer>
       </section>
     </main>
   )

@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const CATEGORIES = ['Work', 'Personal', 'Study', 'Health', 'Other']
@@ -16,39 +16,29 @@ function toLocalDateString(date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-
   return `${year}-${month}-${day}`
 }
 
-function getInitialEvents(storageKey) {
-  try {
-    const saved = localStorage.getItem(storageKey)
-    const parsed = saved ? JSON.parse(saved) : []
-
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
 function formatLongDate(dateString) {
-  const date = new Date(`${dateString}T12:00:00`)
-
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return new Date(`${dateString}T12:00:00`).toLocaleDateString(
+    undefined,
+    {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }
+  )
 }
 
 function formatShortDate(dateString) {
-  const date = new Date(`${dateString}T12:00:00`)
-
-  return date.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  })
+  return new Date(`${dateString}T12:00:00`).toLocaleDateString(
+    undefined,
+    {
+      day: 'numeric',
+      month: 'short',
+    }
+  )
 }
 
 function getMonthLabel(date) {
@@ -61,33 +51,65 @@ function getMonthLabel(date) {
 function sortEvents(events) {
   return [...events].sort((a, b) => {
     const dateOrder = a.date.localeCompare(b.date)
-
     if (dateOrder !== 0) return dateOrder
 
     return (a.time || '23:59').localeCompare(b.time || '23:59')
   })
 }
 
-export default function Calendar({ user }) {
-  const userKey = user?._id || user?.email || user?.username || 'guest'
-  const storageKey = `pikadex-calendar-${userKey}`
+// Communicate with the authenticated Express Calendar APIs.
+async function calendarRequest(action, accessToken, fields = {}) {
+  const formData = new FormData()
+  formData.append('accessToken', accessToken)
 
+  Object.entries(fields).forEach(([key, value]) => {
+    formData.append(key, String(value ?? ''))
+  })
+
+  const response = await fetch(`/api/calendar/${action}`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const raw = await response.text()
+  let result
+
+  try {
+    result = raw ? JSON.parse(raw) : null
+  } catch {
+    throw new Error(
+      `The server returned an invalid response (HTTP ${response.status}).`
+    )
+  }
+
+  if (!response.ok || result?.status !== 'success') {
+    throw new Error(
+      result?.message || `Calendar request failed (HTTP ${response.status}).`
+    )
+  }
+
+  return result
+}
+
+export default function Calendar({ user, accessToken }) {
   const today = toLocalDateString(new Date())
 
-  const [events, setEvents] = useState(() =>
-    getInitialEvents(storageKey)
-  )
-
+  const [events, setEvents] = useState([])
   const [currentMonth, setCurrentMonth] = useState(() => {
     const date = new Date()
     return new Date(date.getFullYear(), date.getMonth(), 1)
   })
-
   const [selectedDate, setSelectedDate] = useState(today)
+
   const [showEventForm, setShowEventForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
-  const [editingId, setEditingId] = useState(null)
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   const [form, setForm] = useState({
     title: '',
@@ -97,20 +119,28 @@ export default function Calendar({ user }) {
     description: '',
   })
 
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const displayName =
+    user?.name || user?.username || user?.email || 'your account'
 
-  useEffect(() => {
-    setEvents(getInitialEvents(storageKey))
-  }, [storageKey])
+  // Load this user's calendar events from MongoDB.
+  const loadEvents = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true)
+    setError('')
 
-  useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(events))
-    } catch {
-      setError('Unable to save calendar events in this browser.')
+      const result = await calendarRequest('list', accessToken)
+      setEvents(Array.isArray(result.data) ? result.data : [])
+    } catch (err) {
+      setError(err.message || 'Unable to load calendar events.')
+    } finally {
+      if (showSpinner) setLoading(false)
     }
-  }, [events, storageKey])
+  }, [accessToken])
+
+  useEffect(() => {
+    loadEvents()
+
+  }, [loadEvents])
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(
@@ -119,9 +149,8 @@ export default function Calendar({ user }) {
       1
     )
 
-    // Monday-first calendar.
+    // Monday-first calendar grid.
     const mondayOffset = (firstDay.getDay() + 6) % 7
-
     const gridStart = new Date(
       firstDay.getFullYear(),
       firstDay.getMonth(),
@@ -135,8 +164,7 @@ export default function Calendar({ user }) {
       return {
         date,
         dateString: toLocalDateString(date),
-        inCurrentMonth:
-          date.getMonth() === currentMonth.getMonth(),
+        inCurrentMonth: date.getMonth() === currentMonth.getMonth(),
       }
     })
   }, [currentMonth])
@@ -168,11 +196,10 @@ export default function Calendar({ user }) {
     })
   }, [selectedEvents, search, categoryFilter])
 
-  const upcomingEvents = useMemo(() => {
-    return sortedEvents
-      .filter((event) => event.date >= today)
-      .slice(0, 4)
-  }, [sortedEvents, today])
+  const upcomingEvents = useMemo(
+    () => sortedEvents.filter((event) => event.date >= today).slice(0, 4),
+    [sortedEvents, today]
+  )
 
   function moveMonth(amount) {
     setCurrentMonth((current) =>
@@ -191,6 +218,8 @@ export default function Calendar({ user }) {
       new Date(now.getFullYear(), now.getMonth(), 1)
     )
     setSelectedDate(toLocalDateString(now))
+    setMessage('')
+    setError('')
   }
 
   function openNewEvent(dateString = selectedDate) {
@@ -234,44 +263,33 @@ export default function Calendar({ user }) {
     }))
   }
 
-  function handleSaveEvent(event) {
+  async function handleSaveEvent(event) {
     event.preventDefault()
 
     const title = form.title.trim()
     const description = form.description.trim()
 
-    if (!title) {
-      setError('Please enter an event title.')
+    if (!title || title.length > 100) {
+      setError('Enter an event title of 1–100 characters.')
       return
     }
 
-    if (!form.date) {
-      setError('Please choose a date.')
+    if (!form.date || !CATEGORIES.includes(form.category)) {
+      setError('Please check the event date and category.')
       return
     }
 
-    if (
-      !CATEGORIES.includes(form.category) ||
-      title.length > 100 ||
-      description.length > 500
-    ) {
-      setError('Please check the event details and try again.')
+    if (description.length > 500) {
+      setError('Description must be no more than 500 characters.')
       return
     }
 
-    if (editingId) {
-      setEvents((current) =>
-        current.map((item) =>
-          item.id === editingId
-            ? { ...item, ...form, title, description }
-            : item
-        )
-      )
+    setSaving(true)
+    setError('')
+    setMessage('')
 
-      setMessage('Event updated.')
-    } else {
-      const newEvent = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    try {
+      const fields = {
         title,
         date: form.date,
         time: form.time,
@@ -279,41 +297,65 @@ export default function Calendar({ user }) {
         description,
       }
 
-      setEvents((current) => [...current, newEvent])
-      setMessage('Event added to your calendar.')
+      const action = editingId ? 'update' : 'create'
+
+      if (editingId) {
+        fields.eventId = editingId
+      }
+
+      const result = await calendarRequest(
+        action,
+        accessToken,
+        fields
+      )
+
+      setSelectedDate(form.date)
+
+      const savedDate = new Date(`${form.date}T12:00:00`)
+      setCurrentMonth(
+        new Date(savedDate.getFullYear(), savedDate.getMonth(), 1)
+      )
+
+      setShowEventForm(false)
+      setEditingId(null)
+      setMessage(result.message || 'Calendar event saved.')
+
+      await loadEvents(false)
+    } catch (err) {
+      setError(err.message || 'Unable to save calendar event.')
+    } finally {
+      setSaving(false)
     }
-
-    setSelectedDate(form.date)
-
-    const savedDate = new Date(`${form.date}T12:00:00`)
-
-    setCurrentMonth(
-      new Date(savedDate.getFullYear(), savedDate.getMonth(), 1)
-    )
-
-    setShowEventForm(false)
-    setEditingId(null)
-    setError('')
   }
 
-  function handleDeleteEvent(eventId) {
-    const confirmed = window.confirm(
-      'Delete this calendar event?'
-    )
+  async function handleDeleteEvent(eventId) {
+    if (saving) return
 
-    if (!confirmed) return
+    if (!window.confirm('Delete this calendar event?')) return
 
-    setEvents((current) =>
-      current.filter((event) => event.id !== eventId)
-    )
-
-    if (editingId === eventId) {
-      setEditingId(null)
-      setShowEventForm(false)
-    }
-
-    setMessage('Event deleted.')
+    setSaving(true)
     setError('')
+    setMessage('')
+
+    try {
+      const result = await calendarRequest(
+        'delete',
+        accessToken,
+        { eventId }
+      )
+
+      if (editingId === eventId) {
+        setEditingId(null)
+        setShowEventForm(false)
+      }
+
+      setMessage(result.message || 'Calendar event deleted.')
+      await loadEvents(false)
+    } catch (err) {
+      setError(err.message || 'Unable to delete calendar event.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -323,7 +365,10 @@ export default function Calendar({ user }) {
           <p className="eyebrow">PLAN YOUR DAYS</p>
           <h1>Calendar</h1>
           <p className="muted">
-            Keep deadlines, study sessions, and important events in one place.
+            Plan deadlines, study sessions, meetings, and personal events.
+          </p>
+          <p className="calendar-account-label">
+            Calendar for {displayName}
           </p>
         </div>
 
@@ -331,6 +376,7 @@ export default function Calendar({ user }) {
           type="button"
           className="calendar-primary-button"
           onClick={() => openNewEvent()}
+          disabled={saving}
         >
           <span aria-hidden="true">＋</span> New event
         </button>
@@ -370,6 +416,7 @@ export default function Calendar({ user }) {
 
       {error && <p className="error">{error}</p>}
       {message && <p className="success-message">{message}</p>}
+      {saving && <p className="muted">Saving changes...</p>}
 
       <div className="calendar-workspace">
         <div className="calendar-board">
@@ -414,17 +461,17 @@ export default function Calendar({ user }) {
                   </span>
 
                   <div className="calendar-day-events">
-                    {dayEvents.slice(0, 2).map((event) => (
+                    {dayEvents.slice(0, 2).map((calendarEvent) => (
                       <span
-                        key={event.id}
+                        key={calendarEvent.id}
                         className={[
                           'calendar-event-chip',
-                          CATEGORY_STYLES[event.category] ||
+                          CATEGORY_STYLES[calendarEvent.category] ||
                             CATEGORY_STYLES.Other,
                         ].join(' ')}
-                        title={event.title}
+                        title={calendarEvent.title}
                       >
-                        {event.title}
+                        {calendarEvent.title}
                       </span>
                     ))}
 
@@ -483,10 +530,7 @@ export default function Calendar({ user }) {
                 className="calendar-event-form"
                 onSubmit={handleSaveEvent}
               >
-                <label htmlFor="calendar-event-title">
-                  Event title
-                </label>
-
+                <label htmlFor="calendar-event-title">Event title</label>
                 <input
                   id="calendar-event-title"
                   name="title"
@@ -498,7 +542,6 @@ export default function Calendar({ user }) {
                 />
 
                 <label htmlFor="calendar-event-date">Date</label>
-
                 <input
                   id="calendar-event-date"
                   type="date"
@@ -509,7 +552,6 @@ export default function Calendar({ user }) {
                 />
 
                 <label htmlFor="calendar-event-time">Time</label>
-
                 <input
                   id="calendar-event-time"
                   type="time"
@@ -518,10 +560,7 @@ export default function Calendar({ user }) {
                   onChange={handleFormChange}
                 />
 
-                <label htmlFor="calendar-event-category">
-                  Category
-                </label>
-
+                <label htmlFor="calendar-event-category">Category</label>
                 <select
                   id="calendar-event-category"
                   name="category"
@@ -538,7 +577,6 @@ export default function Calendar({ user }) {
                 <label htmlFor="calendar-event-description">
                   Description <span className="calendar-optional">(optional)</span>
                 </label>
-
                 <textarea
                   id="calendar-event-description"
                   name="description"
@@ -549,13 +587,16 @@ export default function Calendar({ user }) {
                   rows={3}
                 />
 
-                {error && <p className="error">{error}</p>}
-
                 <button
                   type="submit"
                   className="calendar-primary-button calendar-save-button"
+                  disabled={saving}
                 >
-                  {editingId ? 'Save changes' : 'Create event'}
+                  {saving
+                    ? 'Saving...'
+                    : editingId
+                      ? 'Save changes'
+                      : 'Create event'}
                 </button>
               </form>
             </div>
@@ -581,13 +622,9 @@ export default function Calendar({ user }) {
                 {formatLongDate(selectedDate)}
               </p>
 
-              <label
-                className="calendar-search-label"
-                htmlFor="calendar-search"
-              >
+              <label className="calendar-search-label" htmlFor="calendar-search">
                 Search this day
               </label>
-
               <input
                 id="calendar-search"
                 className="calendar-search"
@@ -612,7 +649,9 @@ export default function Calendar({ user }) {
               </select>
 
               <div className="calendar-agenda-list">
-                {visibleEvents.length === 0 ? (
+                {loading ? (
+                  <p className="muted">Loading events...</p>
+                ) : visibleEvents.length === 0 ? (
                   <div className="calendar-empty">
                     <span>✦</span>
                     <h3>No events planned</h3>
@@ -628,51 +667,53 @@ export default function Calendar({ user }) {
                     </button>
                   </div>
                 ) : (
-                  visibleEvents.map((event) => (
+                  visibleEvents.map((calendarEvent) => (
                     <article
                       className="calendar-agenda-item"
-                      key={event.id}
+                      key={calendarEvent.id}
                     >
                       <span
                         className={[
                           'calendar-agenda-accent',
-                          CATEGORY_STYLES[event.category] ||
+                          CATEGORY_STYLES[calendarEvent.category] ||
                             CATEGORY_STYLES.Other,
                         ].join(' ')}
                       />
 
                       <div className="calendar-agenda-content">
                         <span className="calendar-agenda-time">
-                          {event.time || 'Any time'}
+                          {calendarEvent.time || 'Any time'}
                         </span>
 
-                        <h3>{event.title}</h3>
+                        <h3>{calendarEvent.title}</h3>
 
                         <span
                           className={[
                             'calendar-category-label',
-                            CATEGORY_STYLES[event.category] ||
+                            CATEGORY_STYLES[calendarEvent.category] ||
                               CATEGORY_STYLES.Other,
                           ].join(' ')}
                         >
-                          {event.category}
+                          {calendarEvent.category}
                         </span>
 
-                        {event.description && (
-                          <p>{event.description}</p>
+                        {calendarEvent.description && (
+                          <p>{calendarEvent.description}</p>
                         )}
 
                         <div className="calendar-agenda-actions">
                           <button
                             type="button"
-                            onClick={() => openEditEvent(event)}
+                            onClick={() => openEditEvent(calendarEvent)}
+                            disabled={saving}
                           >
                             Edit
                           </button>
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteEvent(event.id)}
+                            onClick={() => handleDeleteEvent(calendarEvent.id)}
+                            disabled={saving}
                           >
                             Delete
                           </button>
@@ -695,15 +736,17 @@ export default function Calendar({ user }) {
                   No upcoming events yet.
                 </p>
               ) : (
-                upcomingEvents.map((event) => (
+                upcomingEvents.map((calendarEvent) => (
                   <button
-                    key={event.id}
+                    key={calendarEvent.id}
                     type="button"
                     className="calendar-upcoming-item"
                     onClick={() => {
-                      setSelectedDate(event.date)
+                      setSelectedDate(calendarEvent.date)
 
-                      const date = new Date(`${event.date}T12:00:00`)
+                      const date = new Date(
+                        `${calendarEvent.date}T12:00:00`
+                      )
 
                       setCurrentMonth(
                         new Date(date.getFullYear(), date.getMonth(), 1)
@@ -714,11 +757,10 @@ export default function Calendar({ user }) {
                     }}
                   >
                     <span className="calendar-upcoming-date">
-                      {formatShortDate(event.date)}
+                      {formatShortDate(calendarEvent.date)}
                     </span>
-
                     <span className="calendar-upcoming-title">
-                      {event.title}
+                      {calendarEvent.title}
                     </span>
                   </button>
                 ))
@@ -729,7 +771,7 @@ export default function Calendar({ user }) {
       </div>
 
       <p className="calendar-storage-note">
-        Your calendar events are currently saved in this browser for this account.
+        Calendar events are saved to your Pikadex account in MongoDB.
       </p>
     </section>
   )
