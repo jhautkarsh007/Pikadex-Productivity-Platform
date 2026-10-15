@@ -5,8 +5,8 @@ import './App.css'
 
 const CHAT_ROOM = 'Pikadex'
 
-export default function Chat({ user }) {
-  const username =
+export default function Chat({ user, accessToken }) {
+  const displayName =
     user?.username ||
     user?.name ||
     user?.email?.split('@')[0] ||
@@ -22,8 +22,22 @@ export default function Chat({ user }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
+    if (!accessToken) {
+      setConnectionStatus('disconnected')
+      setError('Please log in to use chat.')
+      return undefined
+    }
+
+    setConnectionStatus('connecting')
+    setError('')
+
+    // Send the token privately in the Socket.IO handshake.
+    // The server determines the username after verifying this token.
     const socket = io({
       path: '/socket.io',
+      auth: {
+        token: accessToken,
+      },
     })
 
     socketRef.current = socket
@@ -32,9 +46,8 @@ export default function Chat({ user }) {
       setConnectionStatus('connected')
       setError('')
 
-      // Use the existing event defined by the Express Socket.IO server.
+      // Do not send a username; the server derives it from the JWT.
       socket.emit('joinRoom', {
-        username,
         room: CHAT_ROOM,
       })
     }
@@ -43,9 +56,15 @@ export default function Chat({ user }) {
       setConnectionStatus('disconnected')
     }
 
-    function handleConnectionError() {
+    function handleConnectionError(err) {
       setConnectionStatus('disconnected')
-      setError('Unable to connect to chat. Check that the backend is running.')
+      setError(
+        err.message === 'Authentication required.' ||
+          err.message === 'Authentication failed.' ||
+          err.message === 'Invalid or expired session.'
+          ? 'Your chat session is invalid or expired. Please sign in again.'
+          : 'Unable to connect to chat. Check the server and try again.'
+      )
     }
 
     function addMessages(payload) {
@@ -62,15 +81,21 @@ export default function Chat({ user }) {
       }
     }
 
+    function handleChatError(message) {
+      setError(
+        typeof message === 'string'
+          ? message
+          : 'The chat request could not be completed.'
+      )
+    }
+
     socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectionError)
-
-    // The existing server sends the welcome event as "messages"
-    // and ordinary chat messages as "message".
     socket.on('messages', addMessages)
     socket.on('message', addMessages)
     socket.on('roomUsers', handleRoomUsers)
+    socket.on('chatError', handleChatError)
 
     return () => {
       socket.off('connect', handleConnect)
@@ -79,11 +104,15 @@ export default function Chat({ user }) {
       socket.off('messages', addMessages)
       socket.off('message', addMessages)
       socket.off('roomUsers', handleRoomUsers)
+      socket.off('chatError', handleChatError)
 
       socket.disconnect()
-      socketRef.current = null
+
+      if (socketRef.current === socket) {
+        socketRef.current = null
+      }
     }
-  }, [username])
+  }, [accessToken])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -98,8 +127,15 @@ export default function Chat({ user }) {
     const text = messageText.trim()
     const socket = socketRef.current
 
-    if (!text || !socket || !socket.connected) {
-      setError('Chat is not connected. Please wait and try again.')
+    if (!text) return
+
+    if (!socket || !socket.connected) {
+      setError('Chat is disconnected. Please wait and reconnect.')
+      return
+    }
+
+    if (text.length > 2000) {
+      setError('Messages must contain no more than 2000 characters.')
       return
     }
 
@@ -115,9 +151,9 @@ export default function Chat({ user }) {
   }
 
   function getMessageAuthor(message) {
-    if (typeof message === 'string') return 'System'
+    if (typeof message === 'string') return 'Pikadex'
 
-    return message?.username || 'System'
+    return message?.username || 'Pikadex'
   }
 
   function getMessageTime(message) {
@@ -173,7 +209,7 @@ export default function Chat({ user }) {
 
                 <span className="chat-user-name">
                   {roomUser.username || 'User'}
-                  {roomUser.username === username ? ' (You)' : ''}
+                  {roomUser.username === displayName ? ' (You)' : ''}
                 </span>
               </div>
             ))}
@@ -184,8 +220,11 @@ export default function Chat({ user }) {
           <div className="chat-panel-header">
             <div>
               <h2>{CHAT_ROOM} Chat</h2>
-              <p className="muted">Signed in as {username}</p>
+              <p className="muted">
+                Signed in as {displayName}
+              </p>
             </div>
+
             <span className="chat-live-label">LIVE</span>
           </div>
 
@@ -208,7 +247,7 @@ export default function Chat({ user }) {
               const author = getMessageAuthor(message)
               const text = getMessageText(message)
               const time = getMessageTime(message)
-              const isOwnMessage = author === username
+              const isOwnMessage = author === displayName
 
               return (
                 <article
@@ -259,8 +298,7 @@ export default function Chat({ user }) {
       </div>
 
       <p className="muted chat-footer">
-        Messages are relayed through your existing Socket.IO server.
-        This interface does not currently provide message history.
+        Connected to the authenticated Pikadex Socket.IO room.
       </p>
     </section>
   )

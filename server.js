@@ -1374,59 +1374,162 @@ http.listen(PORT, "0.0.0.0", function () {
       const botName = "Pikadex Chat";
 
       // Run when client connects
-      io.on("connection", (socket) => {
-        console.log(io.of("/").adapter);
-        socket.on("joinRoom", ({ username, room }) => {
-          const user = userJoin(socket.id, username, room);
+      
+      // ================ SOCKET.IO AUTHENTICATION ================
 
-          socket.join(user.room);
+      const CHAT_ROOM = "Pikadex";
 
-          // Welcome current user
-          socket.emit(
-            "messages",
-            formatMessage(botName, "Welcome to ChatCord!")
+      // Authenticate every Socket.IO connection using the existing JWT.
+      io.use(async function (socket, next) {
+        const token =
+          socket.handshake &&
+          socket.handshake.auth &&
+          socket.handshake.auth.token;
+
+        if (typeof token !== "string" || !token) {
+          return next(new Error("Authentication required."));
+        }
+
+        try {
+          const decoded = jwt.verify(token, accessTokenSecret);
+
+          if (!decoded || typeof decoded.email !== "string") {
+            return next(new Error("Invalid authentication token."));
+          }
+
+          // Match both the JWT identity and the currently stored session.
+          const authenticatedUser = await database
+            .collection("users")
+            .findOne({
+              email: decoded.email,
+              accessToken: token
+            });
+
+          if (!authenticatedUser) {
+            return next(new Error("Invalid or expired session."));
+          }
+
+          // The client cannot choose its own authenticated username.
+          socket.data.authUser = {
+            id: authenticatedUser._id.toString(),
+            username: String(
+              authenticatedUser.username ||
+              authenticatedUser.name ||
+              authenticatedUser.email
+            )
+          };
+
+          return next();
+        } catch (error) {
+          console.error("Socket authentication failed:", error.message);
+          return next(new Error("Authentication failed."));
+        }
+      });
+
+      // ================ AUTHENTICATED CHAT HANDLERS ================
+
+      io.on("connection", function (socket) {
+        console.log("Authenticated chat connection:", socket.id);
+
+        // Clients may join only after the server authenticates them.
+        // Use the server-verified username, not a client-supplied username.
+        socket.on("joinRoom", function () {
+          if (socket.data.chatRoom) {
+            return;
+          }
+
+          const username = socket.data.authUser.username;
+          const user = userJoin(
+            socket.id,
+            username,
+            CHAT_ROOM
           );
 
-          // Broadcast when a user connects
+          if (!user || !user.room) {
+            socket.emit("chatError", "Unable to join the chat room.");
+            return;
+          }
+
+          socket.data.chatRoom = user.room;
+          socket.join(user.room);
+
+          // Welcome the connected user.
+          socket.emit(
+            "messages",
+            formatMessage(botName, "Welcome to Pikadex Chat!")
+          );
+
+          // Notify other users in the room.
           socket.broadcast
             .to(user.room)
             .emit(
               "message",
-              formatMessage(botName, `${user.username} has joined the chat`)
+              formatMessage(
+                botName,
+                `${user.username} has joined the chat`
+              )
             );
 
-          // Send users and room info
+          // Publish the current room's members.
           io.to(user.room).emit("roomUsers", {
             room: user.room,
-            users: getRoomUsers(user.room),
+            users: getRoomUsers(user.room)
           });
         });
 
-        // Listen for chatMessage
-        socket.on("chatMessage", (msg) => {
+        // Relay messages only from authenticated, joined users.
+        socket.on("chatMessage", function (msg) {
           const user = getCurrentUser(socket.id);
 
-          io.to(user.room).emit("message", formatMessage(user.username, msg));
+          if (!user || !socket.data.chatRoom) {
+            socket.emit("chatError", "Join the chat before sending messages.");
+            return;
+          }
+
+          if (typeof msg !== "string") {
+            socket.emit("chatError", "Message must be text.");
+            return;
+          }
+
+          const cleanMessage = msg.trim();
+
+          if (!cleanMessage || cleanMessage.length > 2000) {
+            socket.emit(
+              "chatError",
+              "Messages must contain 1–2000 characters."
+            );
+            return;
+          }
+
+          io.to(user.room).emit(
+            "message",
+            formatMessage(user.username, cleanMessage)
+          );
         });
 
-        // Runs when client disconnects
-        socket.on("disconnect", () => {
+        // Remove disconnected users and update room participants.
+        socket.on("disconnect", function () {
           const user = userLeave(socket.id);
 
           if (user) {
             io.to(user.room).emit(
               "message",
-              formatMessage(botName, `${user.username} has left the chat`)
+              formatMessage(
+                botName,
+                `${user.username} has left the chat`
+              )
             );
 
-            // Send users and room info
             io.to(user.room).emit("roomUsers", {
               room: user.room,
-              users: getRoomUsers(user.room),
+              users: getRoomUsers(user.room)
             });
           }
         });
       });
+
+      // ============== END AUTHENTICATED CHAT HANDLERS ==============
+
 
       
       // Notes API: every note belongs to the authenticated user.

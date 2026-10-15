@@ -87,7 +87,7 @@ const FEATURES = [
     icon: '☏',
     title: 'Real-time Chat',
     description:
-      'Communicate instantly with other people in your chat room.',
+      'Communicate instantly with authenticated users.',
     buttonLabel: 'Open chat',
     accent: 'pink',
   },
@@ -108,7 +108,7 @@ export default function App() {
     document.title = 'Pikadex | Productivity Platform'
   }, [])
 
-  // Restore the existing authenticated session.
+  // Restore the saved session.
   useEffect(() => {
     let active = true
 
@@ -150,6 +150,7 @@ export default function App() {
     }
   }, [])
 
+  // Sign in using the existing Express endpoint.
   async function handleLogin(event) {
     event.preventDefault()
     setError('')
@@ -192,6 +193,7 @@ export default function App() {
     }
   }
 
+  // Sign out and clear the local session.
   async function handleLogout() {
     const currentToken = token
     let logoutError = ''
@@ -295,6 +297,7 @@ export default function App() {
     )
   }
 
+  // Main authenticated application.
   return (
     <main className="screen app-screen">
       <section className="dashboard app-shell">
@@ -315,10 +318,12 @@ export default function App() {
                   <p className="eyebrow">
                     YOUR PRODUCTIVITY WORKSPACE
                   </p>
+
                   <h1>
                     Welcome back,{' '}
                     {(user.name || user.username || 'there').split(' ')[0]}!
                   </h1>
+
                   <p className="muted">
                     Bring your plans, tasks, and ideas together.
                   </p>
@@ -326,12 +331,14 @@ export default function App() {
 
                 <div className="dashboard-date">
                   <span className="dashboard-date-icon">▦</span>
+
                   <span>
                     <strong>
                       {new Date().toLocaleDateString(undefined, {
                         weekday: 'long',
                       })}
                     </strong>
+
                     <small>
                       {new Date().toLocaleDateString(undefined, {
                         day: 'numeric',
@@ -368,9 +375,13 @@ export default function App() {
             </section>
           )}
 
-          {activePage === 'notes' && <Notes accessToken={token} />}
+          {activePage === 'notes' && (
+            <Notes accessToken={token} />
+          )}
 
-          {activePage === 'tasks' && <Tasks accessToken={token} />}
+          {activePage === 'tasks' && (
+            <Tasks accessToken={token} />
+          )}
 
           {activePage === 'calendar' && (
             <Calendar user={user} accessToken={token} />
@@ -380,7 +391,9 @@ export default function App() {
             <Analytics accessToken={token} />
           )}
 
-          {activePage === 'chat' && <Chat user={user} />}
+          {activePage === 'chat' && (
+            <Chat user={user} accessToken={token} />
+          )}
         </div>
 
         <footer className="app-footer">
@@ -388,6 +401,7 @@ export default function App() {
             <span className="footer-brand-dot">P</span>
             Pikadex
           </span>
+
           <span>Productivity, organized.</span>
         </footer>
       </section>
