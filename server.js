@@ -1374,59 +1374,162 @@ http.listen(PORT, "0.0.0.0", function () {
       const botName = "Pikadex Chat";
 
       // Run when client connects
-      io.on("connection", (socket) => {
-        console.log(io.of("/").adapter);
-        socket.on("joinRoom", ({ username, room }) => {
-          const user = userJoin(socket.id, username, room);
+      
+      // ================ SOCKET.IO AUTHENTICATION ================
 
-          socket.join(user.room);
+      const CHAT_ROOM = "Pikadex";
 
-          // Welcome current user
-          socket.emit(
-            "messages",
-            formatMessage(botName, "Welcome to ChatCord!")
+      // Authenticate every Socket.IO connection using the existing JWT.
+      io.use(async function (socket, next) {
+        const token =
+          socket.handshake &&
+          socket.handshake.auth &&
+          socket.handshake.auth.token;
+
+        if (typeof token !== "string" || !token) {
+          return next(new Error("Authentication required."));
+        }
+
+        try {
+          const decoded = jwt.verify(token, accessTokenSecret);
+
+          if (!decoded || typeof decoded.email !== "string") {
+            return next(new Error("Invalid authentication token."));
+          }
+
+          // Match both the JWT identity and the currently stored session.
+          const authenticatedUser = await database
+            .collection("users")
+            .findOne({
+              email: decoded.email,
+              accessToken: token
+            });
+
+          if (!authenticatedUser) {
+            return next(new Error("Invalid or expired session."));
+          }
+
+          // The client cannot choose its own authenticated username.
+          socket.data.authUser = {
+            id: authenticatedUser._id.toString(),
+            username: String(
+              authenticatedUser.username ||
+              authenticatedUser.name ||
+              authenticatedUser.email
+            )
+          };
+
+          return next();
+        } catch (error) {
+          console.error("Socket authentication failed:", error.message);
+          return next(new Error("Authentication failed."));
+        }
+      });
+
+      // ================ AUTHENTICATED CHAT HANDLERS ================
+
+      io.on("connection", function (socket) {
+        console.log("Authenticated chat connection:", socket.id);
+
+        // Clients may join only after the server authenticates them.
+        // Use the server-verified username, not a client-supplied username.
+        socket.on("joinRoom", function () {
+          if (socket.data.chatRoom) {
+            return;
+          }
+
+          const username = socket.data.authUser.username;
+          const user = userJoin(
+            socket.id,
+            username,
+            CHAT_ROOM
           );
 
-          // Broadcast when a user connects
+          if (!user || !user.room) {
+            socket.emit("chatError", "Unable to join the chat room.");
+            return;
+          }
+
+          socket.data.chatRoom = user.room;
+          socket.join(user.room);
+
+          // Welcome the connected user.
+          socket.emit(
+            "messages",
+            formatMessage(botName, "Welcome to Pikadex Chat!")
+          );
+
+          // Notify other users in the room.
           socket.broadcast
             .to(user.room)
             .emit(
               "message",
-              formatMessage(botName, `${user.username} has joined the chat`)
+              formatMessage(
+                botName,
+                `${user.username} has joined the chat`
+              )
             );
 
-          // Send users and room info
+          // Publish the current room's members.
           io.to(user.room).emit("roomUsers", {
             room: user.room,
-            users: getRoomUsers(user.room),
+            users: getRoomUsers(user.room)
           });
         });
 
-        // Listen for chatMessage
-        socket.on("chatMessage", (msg) => {
+        // Relay messages only from authenticated, joined users.
+        socket.on("chatMessage", function (msg) {
           const user = getCurrentUser(socket.id);
 
-          io.to(user.room).emit("message", formatMessage(user.username, msg));
+          if (!user || !socket.data.chatRoom) {
+            socket.emit("chatError", "Join the chat before sending messages.");
+            return;
+          }
+
+          if (typeof msg !== "string") {
+            socket.emit("chatError", "Message must be text.");
+            return;
+          }
+
+          const cleanMessage = msg.trim();
+
+          if (!cleanMessage || cleanMessage.length > 2000) {
+            socket.emit(
+              "chatError",
+              "Messages must contain 1–2000 characters."
+            );
+            return;
+          }
+
+          io.to(user.room).emit(
+            "message",
+            formatMessage(user.username, cleanMessage)
+          );
         });
 
-        // Runs when client disconnects
-        socket.on("disconnect", () => {
+        // Remove disconnected users and update room participants.
+        socket.on("disconnect", function () {
           const user = userLeave(socket.id);
 
           if (user) {
             io.to(user.room).emit(
               "message",
-              formatMessage(botName, `${user.username} has left the chat`)
+              formatMessage(
+                botName,
+                `${user.username} has left the chat`
+              )
             );
 
-            // Send users and room info
             io.to(user.room).emit("roomUsers", {
               room: user.room,
-              users: getRoomUsers(user.room),
+              users: getRoomUsers(user.room)
             });
           }
         });
       });
+
+      // ============== END AUTHENTICATED CHAT HANDLERS ==============
+
 
       
       // Notes API: every note belongs to the authenticated user.
@@ -1889,6 +1992,269 @@ http.listen(PORT, "0.0.0.0", function () {
       // ================ END TASK STORAGE API ================
 
       
+      // ================ CALENDAR STORAGE API ================
+
+      const calendarCollection = database.collection("calendarEvents");
+
+      const CALENDAR_CATEGORIES = [
+        "Work",
+        "Personal",
+        "Study",
+        "Health",
+        "Other"
+      ];
+
+      function getCalendarFields(request) {
+        return request.fields || request.body || {};
+      }
+
+      function validateCalendarEvent(fields) {
+        const title =
+          typeof fields.title === "string" ? fields.title.trim() : "";
+
+        const date =
+          typeof fields.date === "string" ? fields.date : "";
+
+        const time =
+          typeof fields.time === "string" ? fields.time : "";
+
+        const category =
+          typeof fields.category === "string" ? fields.category : "";
+
+        const description =
+          typeof fields.description === "string"
+            ? fields.description.trim()
+            : "";
+
+        const validDate =
+          /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+          !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) &&
+          new Date(`${date}T00:00:00Z`)
+            .toISOString()
+            .startsWith(date);
+
+        const validTime =
+          time === "" ||
+          (
+            /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+          );
+
+        if (
+          !title ||
+          title.length > 100 ||
+          !validDate ||
+          !validTime ||
+          !CALENDAR_CATEGORIES.includes(category) ||
+          description.length > 500
+        ) {
+          return {
+            valid: false,
+            message: "Invalid calendar event details."
+          };
+        }
+
+        return {
+          valid: true,
+          event: {
+            title,
+            date,
+            time,
+            category,
+            description
+          }
+        };
+      }
+
+      function serializeCalendarEvent(event) {
+        return {
+          id: event._id.toString(),
+          title: event.title,
+          date: event.date,
+          time: event.time,
+          category: event.category,
+          description: event.description,
+          createdAt: event.createdAt,
+          updatedAt: event.updatedAt
+        };
+      }
+
+      // List only the authenticated user's calendar events.
+      app.post("/api/calendar/list", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const events = await calendarCollection
+              .find({ userId: user._id })
+              .sort({ date: 1, time: 1 })
+              .toArray();
+
+            return response.json({
+              status: "success",
+              data: events.map(serializeCalendarEvent)
+            });
+          } catch (error) {
+            console.error("Unable to load calendar events:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to load calendar events."
+            });
+          }
+        });
+      });
+
+      // Create an event owned by the authenticated user.
+      app.post("/api/calendar/create", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const validation = validateCalendarEvent(
+              getCalendarFields(request)
+            );
+
+            if (!validation.valid) {
+              return response.status(400).json({
+                status: "error",
+                message: validation.message
+              });
+            }
+
+            const now = new Date();
+
+            const event = {
+              ...validation.event,
+              userId: user._id,
+              createdAt: now,
+              updatedAt: now
+            };
+
+            const result = await calendarCollection.insertOne(event);
+
+            return response.status(201).json({
+              status: "success",
+              message: "Calendar event created.",
+              data: serializeCalendarEvent({
+                ...event,
+                _id: result.insertedId
+              })
+            });
+          } catch (error) {
+            console.error("Unable to create calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to create calendar event."
+            });
+          }
+        });
+      });
+
+      // Update only an event owned by the authenticated user.
+      app.post("/api/calendar/update", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const fields = getCalendarFields(request);
+            const eventId = fields.eventId;
+
+            if (
+              typeof eventId !== "string" ||
+              !ObjectId.isValid(eventId)
+            ) {
+              return response.status(400).json({
+                status: "error",
+                message: "Invalid calendar event ID."
+              });
+            }
+
+            const validation = validateCalendarEvent(fields);
+
+            if (!validation.valid) {
+              return response.status(400).json({
+                status: "error",
+                message: validation.message
+              });
+            }
+
+            const result = await calendarCollection.updateOne(
+              {
+                _id: new ObjectId(eventId),
+                userId: user._id
+              },
+              {
+                $set: {
+                  ...validation.event,
+                  updatedAt: new Date()
+                }
+              }
+            );
+
+            if (result.matchedCount === 0) {
+              return response.status(404).json({
+                status: "error",
+                message: "Calendar event not found."
+              });
+            }
+
+            return response.json({
+              status: "success",
+              message: "Calendar event updated."
+            });
+          } catch (error) {
+            console.error("Unable to update calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to update calendar event."
+            });
+          }
+        });
+      });
+
+      // Delete only an event owned by the authenticated user.
+      app.post("/api/calendar/delete", function (request, response) {
+        authenticateNotesRequest(request, response, async function (user) {
+          try {
+            const fields = getCalendarFields(request);
+            const eventId = fields.eventId;
+
+            if (
+              typeof eventId !== "string" ||
+              !ObjectId.isValid(eventId)
+            ) {
+              return response.status(400).json({
+                status: "error",
+                message: "Invalid calendar event ID."
+              });
+            }
+
+            const result = await calendarCollection.deleteOne({
+              _id: new ObjectId(eventId),
+              userId: user._id
+            });
+
+            if (result.deletedCount === 0) {
+              return response.status(404).json({
+                status: "error",
+                message: "Calendar event not found."
+              });
+            }
+
+            return response.json({
+              status: "success",
+              message: "Calendar event deleted."
+            });
+          } catch (error) {
+            console.error("Unable to delete calendar event:", error);
+
+            return response.status(500).json({
+              status: "error",
+              message: "Unable to delete calendar event."
+            });
+          }
+        });
+      });
+
+      // ============== END CALENDAR STORAGE API ==============
+
+
       // To-Do routes - use the existing MongoDB connection
       const todoCollection = database.collection("todoItems");
 

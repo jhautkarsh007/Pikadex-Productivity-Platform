@@ -4,19 +4,22 @@ import Notes from './Notes'
 import Tasks from './Tasks'
 import Analytics from './Analytics'
 import Chat from './Chat'
+import Calendar from './Calendar'
+import Navbar from './components/Navbar'
+import FeatureCard from './components/FeatureCard'
 import './App.css'
 
 async function readJsonResponse(response) {
-  const rawResponse = await response.text()
+  const raw = await response.text()
 
-  if (!rawResponse) {
+  if (!raw) {
     throw new Error(
       `The server returned an empty response (HTTP ${response.status}).`
     )
   }
 
   try {
-    return JSON.parse(rawResponse)
+    return JSON.parse(raw)
   } catch {
     throw new Error(
       `The server returned an invalid response (HTTP ${response.status}).`
@@ -42,6 +45,54 @@ async function fetchUser(accessToken) {
   return result.data
 }
 
+const FEATURES = [
+  {
+    id: 'tasks',
+    icon: '✓',
+    title: 'Task Manager',
+    description:
+      'Organize projects, manage tasks, and track time spent working.',
+    buttonLabel: 'Open tasks',
+    accent: 'green',
+  },
+  {
+    id: 'calendar',
+    icon: '▦',
+    title: 'Calendar',
+    description:
+      'Plan study sessions, deadlines, meetings, and personal events.',
+    buttonLabel: 'Open calendar',
+    accent: 'purple',
+  },
+  {
+    id: 'notes',
+    icon: '▤',
+    title: 'Notes',
+    description:
+      'Capture ideas and keep important information organized.',
+    buttonLabel: 'Open notes',
+    accent: 'blue',
+  },
+  {
+    id: 'analytics',
+    icon: '↗',
+    title: 'Analytics',
+    description:
+      'Review task completion and understand your tracked focus time.',
+    buttonLabel: 'View analytics',
+    accent: 'orange',
+  },
+  {
+    id: 'chat',
+    icon: '☏',
+    title: 'Real-time Chat',
+    description:
+      'Communicate instantly with authenticated users.',
+    buttonLabel: 'Open chat',
+    accent: 'pink',
+  },
+]
+
 export default function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -51,10 +102,13 @@ export default function App() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
-
   const [activePage, setActivePage] = useState('dashboard')
 
-  // Restore the existing session after a page refresh.
+  useEffect(() => {
+    document.title = 'Pikadex | Productivity Platform'
+  }, [])
+
+  // Restore the saved session.
   useEffect(() => {
     let active = true
 
@@ -72,28 +126,16 @@ export default function App() {
         if (active) {
           setToken(savedToken)
           setUser(currentUser)
-          setActivePage('dashboard')
           setError('')
         }
-      } catch {
+      } catch (err) {
         if (active) {
-          // Keep the saved token if the backend is temporarily unavailable.
-          // Clear it when the server responds that the session is invalid.
-          try {
-            const retryUser = await fetchUser(savedToken)
-
-            if (active) {
-              setToken(savedToken)
-              setUser(retryUser)
-            }
-          } catch (retryError) {
-            if (!(retryError instanceof TypeError)) {
-              localStorage.removeItem('accessToken')
-            } else {
-              setError(
-                'Cannot connect to Pikadex. Check that the backend is running.'
-              )
-            }
+          if (err instanceof TypeError) {
+            setError(
+              'Cannot connect to Pikadex. Check that the backend is running.'
+            )
+          } else {
+            localStorage.removeItem('accessToken')
           }
         }
       } finally {
@@ -108,6 +150,7 @@ export default function App() {
     }
   }, [])
 
+  // Sign in using the existing Express endpoint.
   async function handleLogin(event) {
     event.preventDefault()
     setError('')
@@ -134,16 +177,13 @@ export default function App() {
       }
 
       localStorage.setItem('accessToken', result.accessToken)
-
       setToken(result.accessToken)
       setActivePage('dashboard')
       setPassword('')
 
       try {
-        const currentUser = await fetchUser(result.accessToken)
-        setUser(currentUser)
+        setUser(await fetchUser(result.accessToken))
       } catch {
-        // Login succeeded. The profile can be retried after refresh.
         setUser({ email: email.trim() })
       }
     } catch (err) {
@@ -153,6 +193,7 @@ export default function App() {
     }
   }
 
+  // Sign out and clear the local session.
   async function handleLogout() {
     const currentToken = token
     let logoutError = ''
@@ -177,7 +218,6 @@ export default function App() {
         err.message || 'The server could not confirm the logout.'
     } finally {
       localStorage.removeItem('accessToken')
-
       setToken('')
       setUser(null)
       setEmail('')
@@ -192,252 +232,178 @@ export default function App() {
     }
   }
 
+  function navigateTo(page) {
+    setError('')
+    setActivePage(page)
+  }
+
   if (checkingSession) {
     return (
       <main className="screen">
-        <p className="muted">Checking your session...</p>
+        <p className="muted">Loading Pikadex...</p>
       </main>
     )
   }
 
-  // Notes page.
-  if (token && user && activePage === 'notes') {
+  // Login screen.
+  if (!token || !user) {
     return (
       <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Notes accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Task Manager and Timer page.
-  if (token && user && activePage === 'tasks') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Tasks accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Analytics page.
-  if (token && user && activePage === 'analytics') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Analytics accessToken={token} />
-        </section>
-      </main>
-    )
-  }
-
-  // Real-time Socket.IO chat page.
-  if (token && user && activePage === 'chat') {
-    return (
-      <main className="screen">
-        <section className="dashboard">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError('')
-              setActivePage('dashboard')
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-
-          <Chat user={user} />
-        </section>
-      </main>
-    )
-  }
-
-  // Main dashboard.
-  if (token && user) {
-    return (
-      <main className="screen">
-        <section className="dashboard">
+        <section className="login-card">
           <div className="brand-mark">P</div>
 
-          <p className="eyebrow">
-            PIKADEX PRODUCTIVITY PLATFORM
-          </p>
-
-          <h1>Welcome back!</h1>
+          <p className="eyebrow">YOUR PERSONAL WORKSPACE</p>
+          <h1>Welcome to Pikadex</h1>
 
           <p className="muted">
-            Signed in as {user.name || user.email || email}
+            Sign in to organize your work and stay productive.
           </p>
 
-          {error && <p className="error">{error}</p>}
+          <form onSubmit={handleLogin}>
+            <label htmlFor="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
 
-          <div className="feature-grid">
-            <article className="feature">
-              <span>📝</span>
-              <h2>Notes</h2>
-              <p>Your personal notes, saved in MongoDB.</p>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
 
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('notes')
-                }}
-              >
-                Open Notes
-              </button>
-            </article>
+            {error && <p className="error">{error}</p>}
 
-            <article className="feature">
-              <span>✅</span>
-              <h2>Tasks</h2>
-              <p>Organize projects and track your working time.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('tasks')
-                }}
-              >
-                Open Task Manager
-              </button>
-            </article>
-
-            <article className="feature">
-              <span>📊</span>
-              <h2>Analytics</h2>
-              <p>Review your productivity and task progress.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('analytics')
-                }}
-              >
-                Open Analytics
-              </button>
-            </article>
-
-            <article className="feature">
-              <span>💬</span>
-              <h2>Real-time Chat</h2>
-              <p>Send and receive messages instantly.</p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError('')
-                  setActivePage('chat')
-                }}
-              >
-                Open Chat
-              </button>
-            </article>
-          </div>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleLogout}
-          >
-            Log out
-          </button>
+            <button type="submit" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
 
           <p className="muted footer-note">
-            React · Express.js · MongoDB Atlas · Socket.IO
+            Pikadex · Productivity Platform
           </p>
         </section>
       </main>
     )
   }
 
-  // Login page.
+  // Main authenticated application.
   return (
-    <main className="screen">
-      <section className="login-card">
-        <div className="brand-mark">P</div>
+    <main className="screen app-screen">
+      <section className="dashboard app-shell">
+        <Navbar
+          user={user}
+          activePage={activePage}
+          onNavigate={navigateTo}
+          onLogout={handleLogout}
+        />
 
-        <p className="eyebrow">YOUR PERSONAL WORKSPACE</p>
-
-        <h1>Welcome to Pikadex</h1>
-
-        <p className="muted">
-          Sign in to organize your work and stay productive.
-        </p>
-
-        <form onSubmit={handleLogin}>
-          <label htmlFor="email">Email address</label>
-
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-
-          <label htmlFor="password">Password</label>
-
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-
+        <div className="app-page-content">
           {error && <p className="error">{error}</p>}
 
-          <button type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+          {activePage === 'dashboard' && (
+            <section className="dashboard-home">
+              <div className="dashboard-welcome">
+                <div>
+                  <p className="eyebrow">
+                    YOUR PRODUCTIVITY WORKSPACE
+                  </p>
 
-        <p className="muted footer-note">
-          Powered by React, Express.js and MongoDB
-        </p>
+                  <h1>
+                    Welcome back,{' '}
+                    {(user.name || user.username || 'there').split(' ')[0]}!
+                  </h1>
+
+                  <p className="muted">
+                    Bring your plans, tasks, and ideas together.
+                  </p>
+                </div>
+
+                <div className="dashboard-date">
+                  <span className="dashboard-date-icon">▦</span>
+
+                  <span>
+                    <strong>
+                      {new Date().toLocaleDateString(undefined, {
+                        weekday: 'long',
+                      })}
+                    </strong>
+
+                    <small>
+                      {new Date().toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </small>
+                  </span>
+                </div>
+              </div>
+
+              <div className="section-heading">
+                <div>
+                  <h2>Your workspace</h2>
+                  <p className="muted">
+                    Choose a tool to continue your work.
+                  </p>
+                </div>
+
+                <span className="workspace-count">
+                  {FEATURES.length} tools
+                </span>
+              </div>
+
+              <div className="feature-grid feature-grid-modern">
+                {FEATURES.map((feature) => (
+                  <FeatureCard
+                    key={feature.id}
+                    {...feature}
+                    onClick={() => navigateTo(feature.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activePage === 'notes' && (
+            <Notes accessToken={token} />
+          )}
+
+          {activePage === 'tasks' && (
+            <Tasks accessToken={token} />
+          )}
+
+          {activePage === 'calendar' && (
+            <Calendar user={user} accessToken={token} />
+          )}
+
+          {activePage === 'analytics' && (
+            <Analytics accessToken={token} />
+          )}
+
+          {activePage === 'chat' && (
+            <Chat user={user} accessToken={token} />
+          )}
+        </div>
+
+        <footer className="app-footer">
+          <span>
+            <span className="footer-brand-dot">P</span>
+            Pikadex
+          </span>
+
+          <span>Productivity, organized.</span>
+        </footer>
       </section>
     </main>
   )
