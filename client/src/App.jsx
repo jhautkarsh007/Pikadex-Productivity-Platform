@@ -289,6 +289,20 @@ export default function App() {
             </button>
           </form>
 
+          <p style={{ marginTop: '18px', textAlign: 'center' }}>
+            <span className="muted">Don't have an account? </span>
+            <a
+              href="/signup"
+              style={{
+                color: '#8b9cff',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              Create an account
+            </a>
+          </p>
+
           <p className="muted footer-note">
             Pikadex · Productivity Platform
           </p>
