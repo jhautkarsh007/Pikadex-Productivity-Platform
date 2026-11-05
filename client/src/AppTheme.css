@@ -1,0 +1,364 @@
+/* Pikadex — unified application theme
+   Load after App.css and AppAuth.css. This file styles the authenticated
+   workspace and shared UI primitives without changing component behavior. */
+
+:root {
+  color-scheme: dark;
+  --pk-bg: #090f1e;
+  --pk-bg-soft: #0f1830;
+  --pk-surface: rgba(19, 29, 53, 0.88);
+  --pk-surface-strong: #172440;
+  --pk-surface-hover: #1c2b4b;
+  --pk-border: rgba(168, 185, 226, 0.14);
+  --pk-border-strong: rgba(168, 185, 226, 0.24);
+  --pk-text: #edf2ff;
+  --pk-muted: #9aa9c8;
+  --pk-subtle: #7181a3;
+  --pk-primary: #a99aff;
+  --pk-primary-strong: #8875f4;
+  --pk-mint: #72e0c0;
+  --pk-cyan: #74c9e8;
+  --pk-danger: #ff8e9a;
+  --pk-success: #77dfb5;
+  --pk-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+  --pk-radius-lg: 24px;
+  --pk-radius-md: 16px;
+  --pk-radius-sm: 11px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html { min-width: 320px; background: var(--pk-bg); }
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(ellipse at 12% 5%, rgba(105, 91, 214, 0.18), transparent 34rem),
+    radial-gradient(ellipse at 88% 18%, rgba(57, 181, 160, 0.10), transparent 30rem),
+    linear-gradient(145deg, #080e1b 0%, #0c1428 52%, #0a1321 100%);
+  color: var(--pk-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; }
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+::selection { background: rgba(169, 154, 255, 0.34); color: #fff; }
+
+/* Authenticated application frame */
+.app-screen {
+  min-height: 100vh;
+  padding: clamp(14px, 2.7vw, 36px);
+  color: var(--pk-text);
+  background:
+    radial-gradient(ellipse at 8% 12%, rgba(116, 101, 232, 0.12), transparent 34rem),
+    radial-gradient(ellipse at 92% 88%, rgba(63, 190, 160, 0.08), transparent 30rem);
+}
+.app-screen .app-shell {
+  width: min(1500px, 100%);
+  min-height: calc(100vh - clamp(28px, 5.4vw, 72px));
+  margin: 0 auto;
+  padding: clamp(18px, 2.4vw, 34px);
+  overflow: hidden;
+  color: var(--pk-text);
+  background: linear-gradient(145deg, rgba(17, 27, 50, 0.96), rgba(12, 21, 40, 0.96));
+  border: 1px solid var(--pk-border);
+  border-radius: 30px;
+  box-shadow: var(--pk-shadow);
+  backdrop-filter: blur(18px);
+}
+.app-page-content { min-width: 0; padding: clamp(16px, 2vw, 28px) 0; color: var(--pk-text); }
+.app-page-content > * { min-width: 0; }
+.app-screen h1, .app-screen h2, .app-screen h3, .app-screen h4 {
+  color: var(--pk-text);
+  letter-spacing: -0.035em;
+}
+.app-screen h1 { font-size: clamp(1.8rem, 3vw, 2.65rem); line-height: 1.12; }
+.app-screen h2 { font-size: clamp(1.35rem, 2vw, 1.8rem); }
+.app-screen p { line-height: 1.65; }
+.app-screen .muted { color: var(--pk-muted); }
+.app-screen .eyebrow {
+  color: var(--pk-mint);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+/* Main dashboard welcome and section headers */
+.app-screen .dashboard-welcome {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: clamp(22px, 3vw, 36px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 88% 5%, rgba(169, 154, 255, 0.20), transparent 18rem),
+    linear-gradient(125deg, rgba(35, 48, 83, 0.94), rgba(20, 39, 58, 0.92));
+  border: 1px solid var(--pk-border-strong);
+  border-radius: var(--pk-radius-lg);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.16);
+}
+.app-screen .dashboard-welcome h1 { margin: 8px 0 10px; }
+.app-screen .dashboard-welcome p { margin-bottom: 0; }
+.app-screen .dashboard-date {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 0 0 auto;
+  padding: 14px 17px;
+  color: var(--pk-text);
+  background: rgba(8, 16, 31, 0.48);
+  border: 1px solid rgba(191, 203, 244, 0.16);
+  border-radius: 16px;
+}
+.app-screen .dashboard-date-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #15162a;
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, var(--pk-primary), var(--pk-mint));
+  border-radius: 13px;
+}
+.app-screen .dashboard-date strong, .app-screen .dashboard-date small { display: block; }
+.app-screen .dashboard-date small { margin-top: 3px; color: var(--pk-muted); }
+.app-screen .section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 34px 0 18px;
+}
+.app-screen .section-heading h2 { margin: 0 0 5px; }
+.app-screen .section-heading p { margin: 0; }
+.app-screen .workspace-count {
+  padding: 8px 13px;
+  color: var(--pk-mint);
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: rgba(114, 224, 192, 0.09);
+  border: 1px solid rgba(114, 224, 192, 0.2);
+  border-radius: 999px;
+}
+
+/* Feature tiles on the home dashboard */
+.app-screen .feature-grid-modern {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+}
+.app-screen .feature-grid-modern > *,
+.app-screen [class*="feature-card"],
+.app-screen [class*="feature-tile"] {
+  min-width: 0;
+}
+.app-screen [class*="feature-card"],
+.app-screen [class*="feature-tile"] {
+  color: var(--pk-text);
+  background: linear-gradient(145deg, rgba(29, 43, 73, 0.94), rgba(17, 30, 53, 0.94));
+  border: 1px solid var(--pk-border);
+  border-radius: 19px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.13);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+.app-screen [class*="feature-card"]:hover,
+.app-screen [class*="feature-tile"]:hover {
+  transform: translateY(-4px);
+  border-color: rgba(169, 154, 255, 0.48);
+  background: linear-gradient(145deg, rgba(38, 52, 87, 0.98), rgba(19, 40, 59, 0.98));
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
+/* Shared surfaces used by Notes, Tasks, Calendar, Analytics and Chat */
+.app-screen .app-page-content [class*="card"],
+.app-screen .app-page-content [class*="panel"],
+.app-screen .app-page-content [class*="widget"],
+.app-screen .app-page-content [class*="container"] {
+  border-color: var(--pk-border);
+}
+.app-screen .app-page-content [class*="card"],
+.app-screen .app-page-content [class*="panel"],
+.app-screen .app-page-content [class*="widget"] {
+  color: var(--pk-text);
+}
+.app-screen .app-page-content [class*="card"]:not(button),
+.app-screen .app-page-content [class*="panel"]:not(button),
+.app-screen .app-page-content [class*="widget"]:not(button) {
+  border-radius: var(--pk-radius-md);
+}
+.app-screen .app-page-content [class*="title"],
+.app-screen .app-page-content [class*="heading"] { color: var(--pk-text); }
+.app-screen .app-page-content [class*="description"],
+.app-screen .app-page-content [class*="subtitle"],
+.app-screen .app-page-content [class*="meta"],
+.app-screen .app-page-content [class*="empty"] { color: var(--pk-muted); }
+
+/* Navigation — supports semantic nav/header and common navbar class names */
+.app-screen nav,
+.app-screen header,
+.app-screen [class*="navbar"],
+.app-screen [class*="nav-bar"],
+.app-screen [class*="topbar"],
+.app-screen [class*="side-nav"] {
+  color: var(--pk-text);
+  border-color: var(--pk-border);
+}
+.app-screen nav a,
+.app-screen header a,
+.app-screen [class*="navbar"] a,
+.app-screen [class*="nav-bar"] a,
+.app-screen [class*="side-nav"] a {
+  color: var(--pk-muted);
+  text-decoration: none;
+  transition: color 160ms ease, background 160ms ease;
+}
+.app-screen nav a:hover,
+.app-screen header a:hover,
+.app-screen [class*="navbar"] a:hover,
+.app-screen [class*="nav-bar"] a:hover,
+.app-screen [class*="side-nav"] a:hover { color: var(--pk-text); }
+.app-screen nav button,
+.app-screen header button,
+.app-screen [class*="navbar"] button,
+.app-screen [class*="nav-bar"] button,
+.app-screen [class*="side-nav"] button {
+  color: var(--pk-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+.app-screen nav button:hover,
+.app-screen header button:hover,
+.app-screen [class*="navbar"] button:hover,
+.app-screen [class*="nav-bar"] button:hover,
+.app-screen [class*="side-nav"] button:hover {
+  color: var(--pk-text);
+  background: rgba(169, 154, 255, 0.10);
+  border-color: var(--pk-border);
+}
+
+/* Buttons and controls */
+.app-screen .app-page-content button,
+.app-screen .app-page-content input[type="button"],
+.app-screen .app-page-content input[type="submit"] {
+  min-height: 40px;
+  padding: 10px 15px;
+  color: #11172a;
+  font-weight: 750;
+  background: linear-gradient(120deg, #b6a8ff, #83e5c8);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 7px 18px rgba(120, 126, 228, 0.16);
+  cursor: pointer;
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+}
+.app-screen .app-page-content button:hover:not(:disabled),
+.app-screen .app-page-content input[type="button"]:hover,
+.app-screen .app-page-content input[type="submit"]:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 22px rgba(120, 126, 228, 0.23);
+}
+.app-screen .app-page-content button:disabled { opacity: 0.55; cursor: not-allowed; }
+.app-screen .app-page-content input:not([type="checkbox"]):not([type="radio"]),
+.app-screen .app-page-content textarea,
+.app-screen .app-page-content select {
+  width: 100%;
+  min-height: 42px;
+  padding: 11px 13px;
+  color: var(--pk-text);
+  background: rgba(7, 14, 28, 0.68);
+  border: 1px solid var(--pk-border-strong);
+  border-radius: 11px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.app-screen .app-page-content textarea { min-height: 110px; resize: vertical; }
+.app-screen .app-page-content input::placeholder,
+.app-screen .app-page-content textarea::placeholder { color: #7786a5; }
+.app-screen .app-page-content input:focus,
+.app-screen .app-page-content textarea:focus,
+.app-screen .app-page-content select:focus {
+  border-color: rgba(169, 154, 255, 0.8);
+  background: rgba(11, 20, 39, 0.95);
+  box-shadow: 0 0 0 3px rgba(169, 154, 255, 0.13);
+}
+.app-screen .app-page-content label { color: #cbd5ec; font-weight: 650; }
+.app-screen .app-page-content input[type="checkbox"],
+.app-screen .app-page-content input[type="radio"] { accent-color: var(--pk-primary-strong); }
+
+/* Tables and list rows */
+.app-screen .app-page-content table { width: 100%; border-collapse: separate; border-spacing: 0; color: var(--pk-text); }
+.app-screen .app-page-content th {
+  color: #aab8d7;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(169, 154, 255, 0.07);
+}
+.app-screen .app-page-content th,
+.app-screen .app-page-content td { padding: 12px 14px; border-bottom: 1px solid var(--pk-border); }
+.app-screen .app-page-content tr:hover td { background: rgba(169, 154, 255, 0.045); }
+.app-screen .app-page-content li { color: var(--pk-text); }
+
+/* Chat, calendar and analytics visual cues */
+.app-screen .app-page-content [class*="message"] { border-color: var(--pk-border); }
+.app-screen .app-page-content [class*="message"]:not(input):not(textarea) { border-radius: 15px; }
+.app-screen .app-page-content [class*="calendar"] button,
+.app-screen .app-page-content [class*="calendar"] [role="button"] { border-radius: 10px; }
+.app-screen .app-page-content [class*="calendar"] [aria-selected="true"],
+.app-screen .app-page-content [class*="calendar"] .active,
+.app-screen .app-page-content [class*="calendar"] .selected {
+  color: #11172a;
+  background: linear-gradient(120deg, var(--pk-primary), var(--pk-mint));
+}
+.app-screen .app-page-content [class*="progress"] { accent-color: var(--pk-mint); }
+.app-screen .app-page-content progress { accent-color: var(--pk-mint); }
+
+/* Status and footer */
+.app-screen .error { color: var(--pk-danger); }
+.app-screen .success-message { color: var(--pk-success); }
+.app-screen .app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 18px;
+  color: var(--pk-subtle);
+  font-size: 0.84rem;
+  border-top: 1px solid var(--pk-border);
+}
+.app-screen .footer-brand-dot {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  place-items: center;
+  color: #10172a;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--pk-primary), var(--pk-mint));
+  border-radius: 8px;
+}
+
+/* Scrollbars and keyboard accessibility */
+.app-screen * { scrollbar-color: #445274 transparent; scrollbar-width: thin; }
+.app-screen *:focus-visible { outline: 2px solid var(--pk-mint); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .app-screen { padding: 10px; }
+  .app-screen .app-shell { min-height: calc(100vh - 20px); padding: 15px; border-radius: 22px; }
+  .app-screen .dashboard-welcome { align-items: flex-start; flex-direction: column; }
+  .app-screen .dashboard-date { width: 100%; }
+  .app-screen .section-heading { align-items: flex-start; flex-direction: column; }
+  .app-screen .feature-grid-modern { grid-template-columns: 1fr; }
+  .app-screen .app-footer { align-items: flex-start; flex-direction: column; }
+  .app-screen .app-page-content table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-screen *, .app-screen *::before, .app-screen *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

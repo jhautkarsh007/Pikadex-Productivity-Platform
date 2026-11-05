@@ -8,6 +8,8 @@ import Calendar from './Calendar'
 import Navbar from './components/Navbar'
 import FeatureCard from './components/FeatureCard'
 import './App.css'
+import './AppAuth.css'
+import './AppTheme.css'
 
 async function readJsonResponse(response) {
   const raw = await response.text()
@@ -103,6 +105,16 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
+  const [authPage, setAuthPage] = useState('login')
+  const [notice, setNotice] = useState('')
+  const [signupForm, setSignupForm] = useState({
+    name: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    gender: 'Male',
+  })
 
   useEffect(() => {
     document.title = 'Pikadex | Productivity Platform'
@@ -193,6 +205,58 @@ export default function App() {
     }
   }
 
+  // Register a new account using the existing Express /signup endpoint.
+  async function handleSignup(event) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+
+    if (signupForm.password !== signupForm.confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('name', signupForm.name.trim())
+      formData.append('username', signupForm.username.trim())
+      formData.append('email', signupForm.email.trim())
+      formData.append('password', signupForm.password)
+      formData.append('gender', signupForm.gender)
+
+      const response = await fetch('/signup', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await readJsonResponse(response)
+
+      if (!response.ok || result.status !== 'success') {
+        throw new Error(result.message || 'Unable to create your account.')
+      }
+
+      const registeredEmail = signupForm.email.trim()
+      setSignupForm({
+        name: '',
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        gender: 'Male',
+      })
+      setEmail(registeredEmail)
+      setPassword('')
+      setAuthPage('login')
+      setNotice(result.message || 'Account created successfully. You can sign in now.')
+    } catch (err) {
+      setError(err.message || 'Unable to create your account. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Sign out and clear the local session.
   async function handleLogout() {
     const currentToken = token
@@ -245,68 +309,231 @@ export default function App() {
     )
   }
 
-  // Login screen.
+  // React authentication screens: login and signup.
   if (!token || !user) {
+    const isSignup = authPage === 'signup'
+
     return (
-      <main className="screen">
-        <section className="login-card">
-          <div className="brand-mark">P</div>
+      <main className={`screen auth-screen${isSignup ? ' auth-screen-signup' : ''}`}>
+        <div className="auth-orb auth-orb-one" aria-hidden="true" />
+        <div className="auth-orb auth-orb-two" aria-hidden="true" />
 
-          <p className="eyebrow">YOUR PERSONAL WORKSPACE</p>
-          <h1>Welcome to Pikadex</h1>
+        <div className="auth-layout">
+          <aside className="auth-showcase">
+            <div className="auth-brand-lockup">
+              <div className="brand-mark">P</div>
+              <span className="auth-brand-name">pikadex<span>.</span></span>
+              <span className="auth-brand-label">YOUR WORKSPACE</span>
+            </div>
 
-          <p className="muted">
-            Sign in to organize your work and stay productive.
-          </p>
+            <div className="auth-showcase-copy">
+              <p className="auth-kicker"><span /> FOCUS ON WHAT MATTERS</p>
+              <h2>Make space for<br /><em>great work.</em></h2>
+              <p className="auth-showcase-description">
+                A calmer way to plan your day, capture ideas, and make meaningful progress.
+              </p>
 
-          <form onSubmit={handleLogin}>
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
+              <div className="auth-benefits">
+                <div className="auth-benefit">
+                  <span className="auth-benefit-icon">✦</span>
+                  <span><strong>Find your focus</strong><small>Keep every priority in view.</small></span>
+                </div>
+                <div className="auth-benefit">
+                  <span className="auth-benefit-icon">▦</span>
+                  <span><strong>Bring it together</strong><small>Tasks, notes, and plans in one place.</small></span>
+                </div>
+                <div className="auth-benefit">
+                  <span className="auth-benefit-icon">↗</span>
+                  <span><strong>See your progress</strong><small>Turn small steps into momentum.</small></span>
+                </div>
+              </div>
+            </div>
 
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
+            <div className="auth-showcase-bottom">
+              <div className="auth-avatar-stack" aria-hidden="true">
+                <span>U</span><span>P</span><span>+</span>
+              </div>
+              <p>Build better days, one task at a time.</p>
+            </div>
+          </aside>
 
-            {error && <p className="error">{error}</p>}
+          <section className={`login-card auth-card${isSignup ? ' signup-card' : ''}`}>
+            <div className="auth-card-header">
+              <span className="auth-form-label">{isSignup ? 'GET STARTED' : 'WELCOME BACK'}</span>
+              <span className="auth-secure-label"><span /> SECURE WORKSPACE</span>
+            </div>
 
-            <button type="submit" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
+            <p className="eyebrow">{isSignup ? 'YOUR NEXT CHAPTER STARTS HERE' : 'YOUR PERSONAL WORKSPACE'}</p>
+            <h1>{isSignup ? 'Create your account' : 'Welcome back.'}</h1>
+            <p className="muted auth-intro">
+              {isSignup
+                ? 'Set up your space and make every day a little more intentional.'
+                : 'Sign in and pick up right where your best work begins.'}
+            </p>
 
-          <p style={{ marginTop: '18px', textAlign: 'center' }}>
-            <span className="muted">Don't have an account? </span>
-            <a
-              href="/signup"
-              style={{
-                color: '#8b9cff',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              Create an account
-            </a>
-          </p>
+            {notice && !isSignup && (
+              <p className="success-message" role="status">{notice}</p>
+            )}
 
-          <p className="muted footer-note">
-            Pikadex · Productivity Platform
-          </p>
-        </section>
+            {isSignup ? (
+              <form className="auth-form signup-form" onSubmit={handleSignup}>
+                <div className="auth-field">
+                  <label htmlFor="signup-name">Full name</label>
+                  <input
+                    id="signup-name"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your full name"
+                    value={signupForm.name}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="signup-username">Username</label>
+                  <input
+                    id="signup-username"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="Choose a username"
+                    value={signupForm.username}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, username: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="auth-field auth-field-wide">
+                  <label htmlFor="signup-email">Email address</label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={signupForm.email}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="signup-password">Password</label>
+                  <input
+                    id="signup-password"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Create a password"
+                    minLength={6}
+                    value={signupForm.password}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, password: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="signup-confirm-password">Confirm password</label>
+                  <input
+                    id="signup-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Repeat password"
+                    minLength={6}
+                    value={signupForm.confirmPassword}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, confirmPassword: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="auth-field auth-field-wide">
+                  <label htmlFor="signup-gender">Gender</label>
+                  <select
+                    id="signup-gender"
+                    value={signupForm.gender}
+                    onChange={(event) =>
+                      setSignupForm((current) => ({ ...current, gender: event.target.value }))
+                    }
+                    required
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+
+                {error && <p className="error auth-form-message" role="alert">{error}</p>}
+
+                <button className="auth-submit auth-field-wide" type="submit" disabled={loading}>
+                  {loading ? 'Creating your space...' : 'Create account'}
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </form>
+            ) : (
+              <form className="auth-form" onSubmit={handleLogin}>
+                <div className="auth-field">
+                  <label htmlFor="email">Email address</label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="password">Password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                  />
+                </div>
+
+                {error && <p className="error auth-form-message" role="alert">{error}</p>}
+
+                <button className="auth-submit" type="submit" disabled={loading}>
+                  {loading ? 'Signing you in...' : 'Sign in'}
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </form>
+            )}
+
+            <div className="auth-switch">
+              <span>{isSignup ? 'Already have an account?' : 'New to Pikadex?'}</span>
+              <a
+                href={isSignup ? '/login' : '/signup'}
+                onClick={(event) => {
+                  event.preventDefault()
+                  setError('')
+                  setNotice('')
+                  setAuthPage(isSignup ? 'login' : 'signup')
+                }}
+              >
+                {isSignup ? 'Sign in' : 'Create an account'}
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+
+            <p className="auth-legal">By continuing, you agree to use Pikadex responsibly.</p>
+          </section>
+        </div>
       </main>
     )
   }
